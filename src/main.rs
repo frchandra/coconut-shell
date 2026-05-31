@@ -13,7 +13,13 @@ fn main() {
             break;
         }
 
-        println!("{}: command not found", command.trim());
-        io::stdout().flush().unwrap();
+        if command.starts_with("echo ") {
+            println!("{}", command[5..].trim());
+        } else {
+            println!("{}: command not found", command.trim());
+            io::stdout().flush().unwrap();
+        }
+
+
     }
 }
