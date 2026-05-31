@@ -4,22 +4,22 @@ use std::io::{self, Write};
 fn main() {
     loop {
         print!("$ ");
-        io::stdout().flush().unwrap();
+        io::stdout().flush();
 
-        let mut command: String = String::new();
+        //wait for input
+        let mut command = String::new();
         io::stdin().read_line(&mut command).unwrap();
 
-        if command.trim() == "exit" {
-            break;
+        let command = command.trim();
+        let tokens: Vec<&str> = command.split_whitespace().collect();
+
+        match tokens.as_slice() {
+            [] => (),
+            ["exit"] => break,
+            ["echo", args @ ..] => println!("{}", args.join(" ")),
+            ["type", args @ ("type" | "exit" | "echo")] => println!("{args} is a shell builtin"),
+            ["type", args @ ..] => println!("{}: not found", args[0]),
+            _ => println!("{command}: command not found"),
         }
-
-        if command.starts_with("echo ") {
-            println!("{}", command[5..].trim());
-        } else {
-            println!("{}: command not found", command.trim());
-            io::stdout().flush().unwrap();
-        }
-
-
     }
 }
