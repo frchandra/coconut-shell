@@ -44,6 +44,21 @@ fn execute_type_command(argument: &str) {
     }
 }
 
+fn execute_external_command(command: &str, args: &[&str]) {
+
+    match find_in_path(command) {
+        Some(path) => {
+            let mut child = std::process::Command::new(path.file_name().unwrap())
+                .args(args)
+                .spawn()
+                .expect("Failed to execute command");
+
+            child.wait().expect("Failed to wait on child");
+        }
+        None => println!("{command}: command not found"),
+    }
+}
+
 fn read_line() -> String {
     let mut input = String::new();
     io::stdin().read_line(&mut input).unwrap();
@@ -63,7 +78,7 @@ fn main() {
             ["exit", ..] => break,
             ["echo", args @ ..] => println!("{}", args.join(" ")),
             ["type", args @ ..] => execute_type_command(&args.join(" ")),
-            [cmd, ..] => println!("{cmd}: command not found"),
+            [cmd, args @ ..] => execute_external_command(cmd, args),
         }
     }
 }
