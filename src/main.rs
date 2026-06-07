@@ -62,21 +62,11 @@ fn execute_external_command(command: &str, args: &[&str]) {
 fn execute_cd_command(path: &str) {
     if PathBuf::from_str(path).unwrap().exists() {
         env::set_current_dir(path).unwrap();
+    } else if path == "~" {
+        env::set_current_dir(env::var("HOME").unwrap()).unwrap();
     } else {
         println!("cd: {path}: No such file or directory");
     }
-    // match path {
-    //     "." => { },
-    //     ".." => env::set_current_dir(&path).unwrap(),
-    //     "~" => env::set_current_dir(env::var("HOME").unwrap()).unwrap(),
-    //     _ => {
-    //         if PathBuf::from_str(path).unwrap().exists(){
-    //             env::set_current_dir(path).unwrap();
-    //         } else {
-    //             println!("cd: {path}: No such file or directory");
-    //         }
-    //     },
-    // }
 }
 
 fn read_line() -> String {
