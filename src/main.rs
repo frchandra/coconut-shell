@@ -3,7 +3,7 @@ use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
 
-const BUILTINS: &[&str] = &["exit", "echo", "type"];
+const BUILTINS: &[&str] = &["exit", "echo", "type", "pwd"];
 
 fn find_in_path(command: &str) -> Option<PathBuf> {
     let path_var = env::var("PATH").unwrap_or_default();
@@ -45,7 +45,6 @@ fn execute_type_command(argument: &str) {
 }
 
 fn execute_external_command(command: &str, args: &[&str]) {
-
     match find_in_path(command) {
         Some(path) => {
             let mut child = std::process::Command::new(path.file_name().unwrap())
@@ -78,6 +77,7 @@ fn main() {
             ["exit", ..] => break,
             ["echo", args @ ..] => println!("{}", args.join(" ")),
             ["type", args @ ..] => execute_type_command(&args.join(" ")),
+            ["pwd", ..] => println!("{}", env::current_dir().unwrap().display()),
             [cmd, args @ ..] => execute_external_command(cmd, args),
         }
     }
