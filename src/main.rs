@@ -2,15 +2,16 @@ use std::env;
 use std::fs;
 use std::io::{self, Write};
 use std::path::PathBuf;
+use std::str::FromStr;
 
-const BUILTINS: &[&str] = &["exit", "echo", "type", "pwd"];
+const BUILTINS: &[&str] = &["exit", "echo", "type", "pwd", "cd"];
 
-fn find_in_path(command: &str) -> Option<PathBuf> {
+fn find_executable_in_path(command: &str) -> Option<PathBuf> {
     let path_var = env::var("PATH").unwrap_or_default();
 
     env::split_paths(&path_var)
         .map(|dir| dir.join(command))
-        .find(|path| path.exists() && is_executable(path))
+        .find(|target| target.exists() && is_executable(target))
 }
 
 fn is_executable(path: &PathBuf) -> bool {
@@ -38,14 +39,14 @@ fn execute_type_command(argument: &str) {
         return;
     }
 
-    match find_in_path(argument) {
+    match find_executable_in_path(argument) {
         Some(path) => println!("{} is {}", argument, path.display()),
         None => println!("{}: not found", argument),
     }
 }
 
 fn execute_external_command(command: &str, args: &[&str]) {
-    match find_in_path(command) {
+    match find_executable_in_path(command) {
         Some(path) => {
             let mut child = std::process::Command::new(path.file_name().unwrap())
                 .args(args)
@@ -56,6 +57,26 @@ fn execute_external_command(command: &str, args: &[&str]) {
         }
         None => println!("{command}: command not found"),
     }
+}
+
+fn execute_cd_command(path: &str) {
+    if PathBuf::from_str(path).unwrap().exists() {
+        env::set_current_dir(path).unwrap();
+    } else {
+        println!("cd: {path}: No such file or directory");
+    }
+    // match path {
+    //     "." => { },
+    //     ".." => env::set_current_dir(&path).unwrap(),
+    //     "~" => env::set_current_dir(env::var("HOME").unwrap()).unwrap(),
+    //     _ => {
+    //         if PathBuf::from_str(path).unwrap().exists(){
+    //             env::set_current_dir(path).unwrap();
+    //         } else {
+    //             println!("cd: {path}: No such file or directory");
+    //         }
+    //     },
+    // }
 }
 
 fn read_line() -> String {
@@ -78,6 +99,7 @@ fn main() {
             ["echo", args @ ..] => println!("{}", args.join(" ")),
             ["type", args @ ..] => execute_type_command(&args.join(" ")),
             ["pwd", ..] => println!("{}", env::current_dir().unwrap().display()),
+            ["cd", path] => execute_cd_command(&path),
             [cmd, args @ ..] => execute_external_command(cmd, args),
         }
     }
