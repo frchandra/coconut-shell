@@ -69,6 +69,32 @@ fn execute_cd_command(path: &str) {
     }
 }
 
+fn tokenize(input: &str) -> Vec<String> {
+    let mut tokens = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+
+    for ch in input.chars() {
+        match ch {
+            '\'' if !in_quotes => in_quotes = true,
+            '\'' if in_quotes => in_quotes = false,
+            ' ' if !in_quotes => {
+                if !current.is_empty() {
+                    tokens.push(current.clone());
+                    current.clear();
+                }
+            }
+            _ => current.push(ch),
+        }
+    }
+
+    if !current.is_empty() {
+        tokens.push(current);
+    }
+
+    tokens
+}
+
 fn read_line() -> String {
     let mut input = String::new();
     io::stdin().read_line(&mut input).unwrap();
@@ -81,15 +107,16 @@ fn main() {
         io::stdout().flush().unwrap();
 
         let input = read_line();
-        let tokens: Vec<&str> = input.split_whitespace().collect();
+        let tokens = tokenize(&input.trim_end());
+        let tokens_ref = tokens.iter().map(|s| s.as_str()).collect::<Vec<&str>>();
 
-        match tokens.as_slice() {
+        match tokens_ref.as_slice() {
             [] => (),
             ["exit", ..] => break,
             ["echo", args @ ..] => println!("{}", args.join(" ")),
             ["type", args @ ..] => execute_type_command(&args.join(" ")),
             ["pwd", ..] => println!("{}", env::current_dir().unwrap().display()),
-            ["cd", path] => execute_cd_command(&path),
+            ["cd", args] => execute_cd_command(&args),
             [cmd, args @ ..] => execute_external_command(cmd, args),
         }
     }
