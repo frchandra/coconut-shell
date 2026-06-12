@@ -69,16 +69,39 @@ fn execute_cd_command(path: &str) {
     }
 }
 
-fn tokenize(input: &str) -> Vec<String> {
-    let mut tokens = Vec::new();
-    let mut current = String::new();
-    let mut in_quotes = false;
 
-    for ch in input.chars() {
+/*
+
+         space
+        ┌─────────────────────────────┐
+        ▼                             │
+  ┌──────────┐   ' or "   ┌─────────────────┐
+  │  NORMAL  │──────────► │   IN_QUOTE      │
+  │          │◄────────── │                 │
+  └──────────┘  ' or "    └─────────────────┘
+   (closing)               (closing quote)
+
+*/
+fn tokenize(input: &str) -> Vec<String> {
+    let mut tokens: Vec<String> = Vec::new();
+    let mut current = String::new();
+    let mut chars = input.trim_end().chars().peekable();
+
+    while let Some(ch) = chars.next() {
         match ch {
-            '\'' if !in_quotes => in_quotes = true,
-            '\'' if in_quotes => in_quotes = false,
-            ' ' if !in_quotes => {
+            '\'' => {
+                for ch in chars.by_ref() {
+                    if ch == '\'' { break; }
+                    current.push(ch);
+                }
+            }
+            '"' => {
+                for ch in chars.by_ref() {
+                    if ch == '"' { break; }
+                    current.push(ch);
+                }
+            }
+            ' ' => {
                 if !current.is_empty() {
                     tokens.push(current.clone());
                     current.clear();
@@ -107,7 +130,7 @@ fn main() {
         io::stdout().flush().unwrap();
 
         let input = read_line();
-        let tokens = tokenize(&input.trim_end());
+        let tokens = tokenize(&input);
         let tokens_ref = tokens.iter().map(|s| s.as_str()).collect::<Vec<&str>>();
 
         match tokens_ref.as_slice() {
