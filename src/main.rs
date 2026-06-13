@@ -89,6 +89,13 @@ fn tokenize(input: &str) -> Vec<String> {
 
     while let Some(ch) = chars.next() {
         match ch {
+            '\\' => {
+                if let Some(&next_ch) = chars.peek() {
+                    current.push(next_ch);
+                    chars.next();
+                }
+            }
+
             '\'' => {
                 for ch in chars.by_ref() {
                     if ch == '\'' { break; }
