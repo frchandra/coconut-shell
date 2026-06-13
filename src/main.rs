@@ -69,7 +69,6 @@ fn execute_cd_command(path: &str) {
     }
 }
 
-
 /*
 
          space
@@ -98,14 +97,26 @@ fn tokenize(input: &str) -> Vec<String> {
 
             '\'' => {
                 for ch in chars.by_ref() {
-                    if ch == '\'' { break; }
+                    if ch == '\'' {
+                        break;
+                    }
                     current.push(ch);
                 }
             }
             '"' => {
-                for ch in chars.by_ref() {
-                    if ch == '"' { break; }
-                    current.push(ch);
+                while let Some(ch) = chars.next() {
+                    if ch == '\\' {
+                        if let Some(&next_ch) = chars.peek() {
+                            // peek without consuming
+                            current.push(next_ch);
+                            chars.next(); // now consume it
+                        }
+                    } else {
+                        if ch == '"' {
+                            break;
+                        }
+                        current.push(ch);
+                    }
                 }
             }
             ' ' => {
