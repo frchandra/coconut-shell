@@ -33,7 +33,7 @@ fn is_executable(path: &PathBuf) -> bool {
     }
 }
 
-fn execute_type_command(argument: &str) {
+fn cmd_type_handler(argument: &str) {
     if BUILTINS.contains(&argument) {
         println!("{argument} is a shell builtin");
         return;
@@ -45,21 +45,33 @@ fn execute_type_command(argument: &str) {
     }
 }
 
-fn execute_external_command(command: &str, args: &[&str]) {
+fn cmd_external_handler(command: &str, args: &[&str]) -> Option<String> {
     match find_executable_in_path(command) {
         Some(path) => {
-            let mut child = std::process::Command::new(path.file_name().unwrap())
+            let output = std::process::Command::new(path.file_name().unwrap())
                 .args(args)
-                .spawn()
+                .output()
                 .expect("Failed to execute command");
 
-            child.wait().expect("Failed to wait on child");
+            // print stderr to terminal regardless of redirect
+            if !output.stderr.is_empty() {
+                eprint!("{}", String::from_utf8_lossy(&output.stderr));
+            }
+
+            Some(
+                String::from_utf8_lossy(&output.stdout)
+                    .trim_end()
+                    .to_string(),
+            )
         }
-        None => println!("{command}: command not found"),
+        None => {
+            eprintln!("{command}: command not found");
+            None
+        }
     }
 }
 
-fn execute_cd_command(path: &str) {
+fn cmd_cd_handler(path: &str) {
     if PathBuf::from_str(path).unwrap().exists() {
         env::set_current_dir(path).unwrap();
     } else if path == "~" {
@@ -103,28 +115,46 @@ fn tokenize(input: &str) -> Vec<String> {
                     current.push(ch);
                 }
             }
+
             '"' => {
                 while let Some(ch) = chars.next() {
-                    if ch == '\\' {
-                        if let Some(&next_ch) = chars.peek() {
-                            // peek without consuming
-                            current.push(next_ch);
-                            chars.next(); // now consume it
-                        }
+                    if ch == '\\'
+                        && let Some(&next_ch) = chars.peek()
+                    {
+                        // peek the next chars without consuming
+                        current.push(next_ch); // now consume it, skipping the backslash
+                        chars.next();
+                    } else if ch == '"' {
+                        break;
                     } else {
-                        if ch == '"' {
-                            break;
-                        }
                         current.push(ch);
                     }
                 }
             }
+
             ' ' => {
                 if !current.is_empty() {
                     tokens.push(current.clone());
                     current.clear();
                 }
             }
+
+            '>' => {
+                current.push(ch);
+                if current.is_empty() && chars.peek() == Some(&' ') {
+                    tokens.push(current.clone());
+                    current.clear();
+                }
+            }
+
+            '1' => {
+                current.push(ch);
+                if current.is_empty() && chars.peek() == Some(&'>') {
+                    tokens.push(current.clone());
+                    current.clear();
+                }
+            }
+
             _ => current.push(ch),
         }
     }
@@ -151,14 +181,38 @@ fn main() {
         let tokens = tokenize(&input);
         let tokens_ref = tokens.iter().map(|s| s.as_str()).collect::<Vec<&str>>();
 
-        match tokens_ref.as_slice() {
-            [] => (),
+        let (cmd_tokens, redirect_target) =
+            if let Some(pos) = tokens_ref.iter().position(|&t| t == ">" || t == "1>") {
+                let target = tokens_ref.get(pos + 1).copied();
+                (&tokens_ref[..pos], target)
+            } else {
+                (tokens_ref.as_slice(), None)
+            };
+
+        let output: Option<String> = match cmd_tokens {
+            [] => None,
             ["exit", ..] => break,
-            ["echo", args @ ..] => println!("{}", args.join(" ")),
-            ["type", args @ ..] => execute_type_command(&args.join(" ")),
-            ["pwd", ..] => println!("{}", env::current_dir().unwrap().display()),
-            ["cd", args] => execute_cd_command(&args),
-            [cmd, args @ ..] => execute_external_command(cmd, args),
+            ["echo", args @ ..] => Some(args.join(" ")),
+            ["type", args @ ..] => {
+                cmd_type_handler(&args.join(" "));
+                None
+            }
+            ["pwd", ..] => Some(env::current_dir().unwrap().display().to_string()),
+            ["cd", args] => {
+                cmd_cd_handler(args);
+                None
+            }
+            [cmd, args @ ..] => cmd_external_handler(cmd, args),
+        };
+
+        match (&output, redirect_target) {
+            (Some(content), Some(path)) => {
+                std::fs::write(path, content).unwrap();
+            }
+            (Some(content), None) => {
+                println!("{}", content);
+            }
+            _ => {}
         }
     }
 }
