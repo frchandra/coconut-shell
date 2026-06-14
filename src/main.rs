@@ -45,7 +45,12 @@ fn cmd_type_handler(argument: &str) {
     }
 }
 
-fn cmd_external_handler(command: &str, args: &[&str]) -> Option<String> {
+struct CmdOutput {
+    stdout: Option<String>,
+    stderr: Option<String>,
+}
+
+fn cmd_external_handler(command: &str, args: &[&str]) -> CmdOutput {
     match find_executable_in_path(command) {
         Some(path) => {
             let output = std::process::Command::new(path.file_name().unwrap())
@@ -53,21 +58,31 @@ fn cmd_external_handler(command: &str, args: &[&str]) -> Option<String> {
                 .output()
                 .expect("Failed to execute command");
 
-            // print stderr to terminal regardless of redirect
-            if !output.stderr.is_empty() {
-                eprint!("{}", String::from_utf8_lossy(&output.stderr));
+            CmdOutput {
+                stdout: if output.stdout.is_empty() {
+                    None
+                } else {
+                    Some(
+                        String::from_utf8_lossy(&output.stdout)
+                            .trim_end()
+                            .to_string(),
+                    )
+                },
+                stderr: if output.stderr.is_empty() {
+                    None
+                } else {
+                    Some(
+                        String::from_utf8_lossy(&output.stderr)
+                            .trim_end()
+                            .to_string(),
+                    )
+                },
             }
-
-            Some(
-                String::from_utf8_lossy(&output.stdout)
-                    .trim_end()
-                    .to_string(),
-            )
         }
-        None => {
-            eprintln!("{command}: command not found");
-            None
-        }
+        None => CmdOutput {
+            stdout: None,
+            stderr: Some(format!("{command}: command not found")),
+        },
     }
 }
 
@@ -138,23 +153,6 @@ fn tokenize(input: &str) -> Vec<String> {
                     current.clear();
                 }
             }
-
-            '>' => {
-                current.push(ch);
-                if current.is_empty() && chars.peek() == Some(&' ') {
-                    tokens.push(current.clone());
-                    current.clear();
-                }
-            }
-
-            '1' => {
-                current.push(ch);
-                if current.is_empty() && chars.peek() == Some(&'>') {
-                    tokens.push(current.clone());
-                    current.clear();
-                }
-            }
-
             _ => current.push(ch),
         }
     }
@@ -181,38 +179,59 @@ fn main() {
         let tokens = tokenize(&input);
         let tokens_ref = tokens.iter().map(|s| s.as_str()).collect::<Vec<&str>>();
 
-        let (cmd_tokens, redirect_target) =
-            if let Some(pos) = tokens_ref.iter().position(|&t| t == ">" || t == "1>") {
-                let target = tokens_ref.get(pos + 1).copied();
-                (&tokens_ref[..pos], target)
-            } else {
-                (tokens_ref.as_slice(), None)
-            };
-
-        let output: Option<String> = match cmd_tokens {
-            [] => None,
-            ["exit", ..] => break,
-            ["echo", args @ ..] => Some(args.join(" ")),
-            ["type", args @ ..] => {
-                cmd_type_handler(&args.join(" "));
-                None
-            }
-            ["pwd", ..] => Some(env::current_dir().unwrap().display().to_string()),
-            ["cd", args] => {
-                cmd_cd_handler(args);
-                None
-            }
-            [cmd, args @ ..] => cmd_external_handler(cmd, args),
+        let (cmd_tokens, redirect_target, operator) = if let Some(pos) = tokens_ref
+            .iter()
+            .position(|&t| t == ">" || t == "1>" || t == "2>")
+        {
+            let target = tokens_ref.get(pos + 1).copied();
+            let operator = tokens_ref.get(pos).copied();
+            (&tokens_ref[..pos], target, operator)
+        } else {
+            (tokens_ref.as_slice(), None, None)
         };
 
-        match (&output, redirect_target) {
-            (Some(content), Some(path)) => {
-                std::fs::write(path, content).unwrap();
+        match cmd_tokens {
+            [] => {}
+            ["exit", ..] => break,
+            ["echo", args @ ..] => {
+                let output = args.join(" ");
+                match operator {
+                    Some(">") | Some("1>") => {
+                        std::fs::write(redirect_target.unwrap(), output).unwrap();
+                    }
+                    Some("2>") => {
+                        std::fs::write(redirect_target.unwrap(), "").unwrap();
+                        println!("{}", output);
+                    }
+                    _ => {
+                        println!("{}", output);
+                    }
+                }
             }
-            (Some(content), None) => {
-                println!("{}", content);
+            ["type", args @ ..] => cmd_type_handler(&args.join(" ")),
+            ["pwd", ..] => println!("{}", env::current_dir().unwrap().display().to_string()),
+            ["cd", args] => {
+                cmd_cd_handler(args);
             }
-            _ => {}
-        }
+            [cmd, args @ ..] => {
+                let output = cmd_external_handler(cmd, args);
+                match operator {
+                    Some(">") | Some("1>") => {
+                        std::fs::write(redirect_target.unwrap(), output.stdout.unwrap_or_default())
+                            .unwrap();
+                        output.stderr.map(|e| eprintln!("{}", e));
+                    }
+                    Some("2>") => {
+                        std::fs::write(redirect_target.unwrap(), output.stderr.unwrap_or_default())
+                            .unwrap();
+                        output.stdout.map(|s| println!("{}", s));
+                    }
+                    _ => {
+                        output.stdout.map(|s| println!("{}", s));
+                        output.stderr.map(|e| eprintln!("{}", e));
+                    }
+                }
+            }
+        };
     }
 }
