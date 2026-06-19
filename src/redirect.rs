@@ -58,31 +58,32 @@ pub fn apply_redirects(output: &CmdOutput, redirects: &[Redirect]) {
 
         match redir.mode {
             RedirectMode::Truncate => {
-                std::fs::write(&redir.target, content).unwrap();
+                std::fs::write(&redir.target, content.as_bytes()).unwrap();
             }
             RedirectMode::Append => {
                 use std::fs::OpenOptions;
                 use std::io::Write;
+
                 let mut file = OpenOptions::new()
                     .create(true)
                     .append(true)
                     .open(&redir.target)
                     .unwrap();
-                write!(file, "{}", content).unwrap();
+                if file.metadata().unwrap().len() > 0 {
+                    write!(file, "\n{}", content).unwrap(); // Add a newline before appending if the file isn't empty.
+                } else {
+                    write!(file, "{}", content).unwrap();
+                }
             }
         }
     }
 
     // Print anything that wasn't redirected.
-    if !stdout_redirected
-        && let Some(ref s) = output.stdout
-    {
+    if !stdout_redirected && let Some(ref s) = output.stdout {
         println!("{}", s);
     }
 
-    if !stderr_redirected
-        && let Some(ref e) = output.stderr
-    {
+    if !stderr_redirected && let Some(ref e) = output.stderr {
         eprintln!("{}", e);
     }
 }
