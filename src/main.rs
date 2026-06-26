@@ -31,9 +31,9 @@ fn read_line() -> String {
 
         match byte[0] {
             b'\t' => {
-                let prediction = trie.autocomplete(&line).join("");
+                let prediction = trie.autocomplete(&line).join(" ") + " ";
                 line = prediction;
-                print!("\r$ {} ", line);
+                print!("\r$ {}", line);
                 io::stdout().flush().unwrap();
             }
             b'\r' | b'\n' => {
