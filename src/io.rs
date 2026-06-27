@@ -20,8 +20,11 @@ pub fn read_line() -> String {
 
         match byte[0] {
             b'\t' => {
-                let prediction = trie.autocomplete(&line).join(" ") + " ";
-                line = prediction;
+                if let Some(prediction) = trie.autocomplete(&line).first() {
+                    line = prediction.to_string() + " ";
+                } else {
+                    print!("\x07");
+                }
                 print!("\r$ {}", line);
                 io::stdout().flush().unwrap();
             }
