@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -29,6 +30,43 @@ fn is_executable(path: &Path) -> bool {
             .map(|e| e == "exe" || e == "bat" || e == "cmd")
             .unwrap_or(false)
     }
+}
+
+pub fn get_path_executables() -> Vec<String> {
+    let mut executables = Vec::new();
+
+    let path_var = match env::var_os("PATH") {
+        Some(val) => val,
+        None => return executables, // PATH not set
+    };
+
+    // PATH is a list of directories separated by ':' (Unix) or ';' (Windows)
+    for dir in env::split_paths(&path_var) {
+        let entries = match fs::read_dir(&dir) {
+            Ok(e) => e,
+            Err(_) => continue, // skip unreadable/non-existent dirs
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+
+            if path.is_file() && is_executable(&path) {
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    executables.push(name.to_string());
+                }
+            }
+        }
+    }
+
+    executables
+}
+
+pub fn get_path_executables_deduped() -> Vec<String> {
+    let mut seen = HashSet::new();
+    get_path_executables()
+        .into_iter()
+        .filter(|name| seen.insert(name.clone()))
+        .collect()
 }
 
 /// Expand a leading `~` to `$HOME`.

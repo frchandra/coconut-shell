@@ -1,12 +1,19 @@
 use std::collections::HashMap;
 use std::io::{self, Read, Write};
+use crate::builtins;
+use crate::utils::get_path_executables_deduped;
 
 pub fn read_line() -> String {
     let mut trie = Trie::new();
 
-    let words = ["exit", "echo"];
-    for w in &words {
-        trie.insert(w);
+    let registry = builtins::BuiltinRegistry::new();
+    let builtins = registry.names();
+    for b in &builtins {
+        trie.insert(b);
+    }
+
+    for exe in get_path_executables_deduped() {
+        trie.insert(&exe);
     }
 
     set_raw_mode(true);
