@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use std::io::{self, Read, Write};
 use crate::builtins;
 use crate::utils::get_path_executables_deduped;
+use std::collections::HashMap;
+use std::io::{self, Read, Write};
 
 pub fn read_line() -> String {
     let mut trie = Trie::new();
@@ -29,10 +29,10 @@ pub fn read_line() -> String {
             b'\t' => {
                 if let Some(prediction) = trie.autocomplete(&line).first() {
                     line = prediction.to_string() + " ";
+                    print!("\r$ {}", line);
                 } else {
                     print!("\x07");
                 }
-                print!("\r$ {}", line);
                 io::stdout().flush().unwrap();
             }
             b'\r' | b'\n' => {
