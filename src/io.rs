@@ -2,6 +2,10 @@ use crate::builtins;
 use crate::utils::get_path_executables_deduped;
 use std::collections::HashMap;
 use std::io::{self, Read, Write};
+use std::os::fd::AsRawFd;
+use std::sync::OnceLock;
+
+static ORIGINAL_TERMIOS: OnceLock<libc::termios> = OnceLock::new();
 
 pub fn read_line() -> String {
     let mut trie = Trie::new();
@@ -17,6 +21,9 @@ pub fn read_line() -> String {
     }
 
     set_raw_mode(true);
+
+    print!("$ ");
+    io::stdout().flush().unwrap();
 
     let mut line = String::new();
     let stdin = io::stdin();
@@ -59,21 +66,36 @@ pub fn read_line() -> String {
 }
 
 #[cfg(unix)]
-fn set_raw_mode(enable: bool) {
-    use std::os::fd::AsRawFd;
-    unsafe {
-        let fd = io::stdin().as_raw_fd();
-        let mut termios: libc::termios = std::mem::zeroed();
-        libc::tcgetattr(fd, &mut termios);
-        if enable {
-            termios.c_lflag &= !(libc::ICANON | libc::ECHO);
-            termios.c_cc[libc::VMIN] = 1;
-            termios.c_cc[libc::VTIME] = 0;
-        } else {
-            termios.c_lflag |= libc::ICANON | libc::ECHO;
+fn set_raw_mode(enable: bool) -> io::Result<()> {
+    let fd = io::stdin().as_raw_fd();
+
+    if enable {
+        unsafe {
+            let mut termios: libc::termios = std::mem::zeroed();
+            if libc::tcgetattr(fd, &mut termios) != 0 {
+                return Err(io::Error::last_os_error());
+            }
+            // Save original settings once
+            ORIGINAL_TERMIOS.get_or_init(|| termios);
+
+            let mut raw = termios;
+            raw.c_lflag &= !(libc::ICANON | libc::ECHO);
+            raw.c_cc[libc::VMIN] = 1;
+            raw.c_cc[libc::VTIME] = 0;
+
+            if libc::tcsetattr(fd, libc::TCSAFLUSH, &raw) != 0 {
+                return Err(io::Error::last_os_error());
+            }
         }
-        libc::tcsetattr(fd, libc::TCSANOW, &termios);
+    } else if let Some(original) = ORIGINAL_TERMIOS.get() {
+        unsafe {
+            if libc::tcsetattr(fd, libc::TCSAFLUSH, original) != 0 {
+                return Err(io::Error::last_os_error());
+            }
+        }
     }
+
+    Ok(())
 }
 
 #[derive(Default)]
