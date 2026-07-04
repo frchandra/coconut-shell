@@ -28,18 +28,27 @@ pub fn read_line() -> String {
     let mut line = String::new();
     let stdin = io::stdin();
     let mut byte = [0u8; 1];
+    let mut first_tab = false;
 
     loop {
         stdin.lock().read_exact(&mut byte).unwrap();
 
         match byte[0] {
             b'\t' => {
-                if let Some(prediction) = trie.autocomplete(&line).first() {
-                    line = prediction.to_string() + " ";
+                let mut prediction = trie.autocomplete(&line);
+                if prediction.len() == 1 {
+                    line = prediction[0].to_string() + " ";
                     print!("\r$ {}", line);
+                } else if prediction.len() > 1 && first_tab == true {
+                    prediction.sort();
+                    io::stdout().flush().unwrap();
+                    print!("\n{}", prediction.join(" "));
+                    print!("\n$ {}", line);
                 } else {
                     print!("\x07");
                 }
+                first_tab = true;
+
                 io::stdout().flush().unwrap();
             }
             b'\r' | b'\n' => {
