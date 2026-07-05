@@ -61,6 +61,9 @@ pub fn read_line() -> String {
                 if line.pop().is_some() {
                     print!("\x08 \x08");
                     io::stdout().flush().unwrap();
+                } else {
+                    io::stdout().flush().unwrap();
+                    print!("\x07");
                 }
             }
             c if c >= 32 => {
