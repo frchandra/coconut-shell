@@ -1,6 +1,5 @@
 use crate::builtins;
 use crate::utils::get_path_executables_deduped;
-use libc::printf;
 use std::collections::HashMap;
 use std::io::{self, Read, Write};
 use std::os::fd::AsRawFd;
