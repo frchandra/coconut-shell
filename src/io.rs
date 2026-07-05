@@ -1,5 +1,6 @@
 use crate::builtins;
 use crate::utils::get_path_executables_deduped;
+use libc::printf;
 use std::collections::HashMap;
 use std::io::{self, Read, Write};
 use std::os::fd::AsRawFd;
@@ -20,7 +21,7 @@ pub fn read_line() -> String {
         trie.insert(&exe);
     }
 
-    set_raw_mode(true);
+    set_raw_mode(true).expect("TODO: panic message");
 
     print!("$ ");
     io::stdout().flush().unwrap();
@@ -35,9 +36,13 @@ pub fn read_line() -> String {
 
         match byte[0] {
             b'\t' => {
+                let longest = trie.get_longest_common_prefix(&line);
                 let mut prediction = trie.autocomplete(&line);
                 if prediction.len() == 1 {
                     line = prediction[0].to_string() + " ";
+                    print!("\r$ {}", line);
+                } else if longest.is_some() {
+                    line = line + longest.unwrap().as_str();
                     print!("\r$ {}", line);
                 } else if prediction.len() > 1 && first_tab == true {
                     prediction.sort();
@@ -52,7 +57,7 @@ pub fn read_line() -> String {
                 io::stdout().flush().unwrap();
             }
             b'\r' | b'\n' => {
-                set_raw_mode(false);
+                set_raw_mode(false).expect("TODO: panic message");
                 print!("\n");
                 io::stdout().flush().unwrap();
                 return line;
@@ -71,6 +76,7 @@ pub fn read_line() -> String {
                 line.push(ch);
                 print!("{ch}");
                 io::stdout().flush().unwrap();
+                first_tab = false;
             }
             _ => {}
         }
@@ -137,14 +143,14 @@ impl Trie {
     }
 
     /// Check if an exact word exists — O(L)
-    pub fn contains(&self, word: &str) -> bool {
-        self.find_node(word).map(|n| n.is_end).unwrap_or(false)
-    }
+    // pub fn contains(&self, word: &str) -> bool {
+    //     self.find_node(word).map(|n| n.is_end).unwrap_or(false)
+    // }
 
     /// Check if any word starts with prefix — O(P)
-    pub fn starts_with(&self, prefix: &str) -> bool {
-        self.find_node(prefix).is_some()
-    }
+    // pub fn starts_with(&self, prefix: &str) -> bool {
+    //     self.find_node(prefix).is_some()
+    // }
 
     /// Return all words with the given prefix — O(P + N·L)
     pub fn autocomplete(&self, prefix: &str) -> Vec<String> {
@@ -165,6 +171,21 @@ impl Trie {
             node = node.children.get(&ch)?; // ? short-circuits on missing char
         }
         Some(node)
+    }
+
+    pub fn get_longest_common_prefix(&self, prefix: &str) -> Option<String> {
+        let mut node = self.find_node(prefix)?;
+        let mut next_common = String::new();
+        while (node.children.len() == 1 && !node.is_end) {
+            if let Some((key, value)) = node.children.iter().next() {
+                next_common.push(*key);
+                node = value;
+            }
+        }
+        if next_common.is_empty() {
+            return None;
+        }
+        return Some(next_common);
     }
 
     /// DFS from `node`, accumulating complete words into `results`
