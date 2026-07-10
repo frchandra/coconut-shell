@@ -1,16 +1,18 @@
 mod builtins;
 mod executor;
-mod io;
 mod parser;
 mod redirect;
 mod tokenizer;
 mod utils;
+mod readline;
+mod terminal;
+pub(crate) mod trie;
 
 fn main() {
     let registry = builtins::BuiltinRegistry::new();
 
     loop {
-        let result = io::read_line();
+        let result = readline::read_line();
         let tokens = tokenizer::tokenize(&result);
         let pipeline = parser::parse(tokens);
 
