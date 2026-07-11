@@ -143,35 +143,39 @@ fn handle_tab_executable(trie: &Trie, line: &mut String, prefix: &str, tab_count
 }
 
 /// Process a `<Tab>` press: attempt autocompletion for file (and directory) names.
-fn handle_tab_files(
-    line: &mut String,
-    prev_words: &[String],
-    prefix: &str,
-    tab_count: u32,
-) {
+fn handle_tab_files(line: &mut String, prev_words: &[String], prefix: &str, tab_count: u32) {
     // TODO: When prefix contains '/', split into (directory, partial_name)
     // and list entries from that directory instead of ".".
     // e.g. "src/tok" → dir = "src", partial = "tok"
     // This will also need to reconstruct the completed path with the
     // directory prefix when writing back to `line`.
-    let files = get_file_names(".").unwrap_or_default();
+    let mut base_directory = ".";
+    let mut leaf = prefix;
+
+    if let Some(idx) = prefix.rfind("/") {
+        (base_directory, leaf) = prefix.split_at(idx + 1);
+    }
+
+    let files = get_file_names(base_directory).unwrap_or_default();
     let trie = build_custom_trie(files);
 
-    let extension = trie.longest_common_extension(prefix);
-    let mut predictions = trie.autocomplete(prefix);
+    let completion = trie.longest_common_extension(leaf);
+    let mut predictions = trie.autocomplete(leaf);
 
-    if predictions.len() == 1 {
+    if let Some(ext) = completion {
+        // Multiple matches sharing a common extension — fill it in.
+        line.push_str(&ext);
+        line.push(' ');
+        print!("\r$ {line}");
+    } else if predictions.len() == 1 {
         // Single match — rebuild line with the completed filename.
         let mut new_line = prev_words.join(" ");
+        new_line.push_str(base_directory);
         new_line.push(' ');
         new_line.push_str(&predictions[0]);
         new_line.push(' ');
         *line = new_line;
         print!("\r$ {}", line);
-    } else if let Some(ext) = extension {
-        // Multiple matches sharing a common extension — fill it in.
-        line.push_str(&ext);
-        print!("\r$ {line}");
     } else if predictions.len() > 1 && tab_count >= 2 {
         // Second tab with ambiguous completions — list them all.
         predictions.sort();

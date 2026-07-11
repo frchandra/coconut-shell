@@ -30,6 +30,9 @@ impl Trie {
         node.is_end = true;
     }
 
+    // the next 2 function is actually can be combined for simplifying the computational flow.
+    // but considering single responsibility principle and predictability it left as it is
+
     /// Return all words that share the given `prefix` — O(P + N·L).
     pub fn autocomplete(&self, prefix: &str) -> Vec<String> {
         match self.find_node(prefix) {
