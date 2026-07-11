@@ -128,7 +128,7 @@ fn handle_tab_files(line: &mut String /*, first_tab: &mut bool*/) {
 
     let mut predictions = trie.autocomplete(second);
     if predictions.len() >= 1 {
-        *line = format!("{} {}", first, predictions[0]);
+        *line = format!("{} {} ", first, predictions[0]);
         print!("\r$ {}", line);
     } else {
         print!("\x07"); // bell
