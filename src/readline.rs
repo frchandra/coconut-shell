@@ -167,7 +167,7 @@ fn handle_tab_files(line: &mut String, prev_words: &[String], prefix: &str, tab_
     if let Some(ext) = completion {
         // Multiple matches sharing a common extension — fill it in.
         line.push_str(&ext);
-        if !ext.rfind('/').is_some() {
+        if !ext.rfind('/').is_some() && predictions.len() == 1 {
             line.push(' ');
         }
         print!("\r$ {line}");
