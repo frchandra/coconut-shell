@@ -64,7 +64,7 @@ fn classify(word: String) -> Token {
 ///
 /// This does *not* classify operators — it only splits on whitespace
 /// while respecting quote boundaries and backslash escapes.
-fn split_words(input: &str) -> Vec<String> {
+pub fn split_words(input: &str) -> Vec<String> {
     let mut words: Vec<String> = Vec::new();
     let mut current = String::new();
     let mut chars = input.trim_end().chars().peekable();

@@ -5,6 +5,7 @@ use crate::builtins;
 use crate::utils::get_path_executables_deduped;
 
 use crate::terminal;
+use crate::tokenizer;
 use crate::trie::Trie;
 
 /// Display the shell prompt.
@@ -37,6 +38,28 @@ fn build_custom_trie(names: Vec<String>) -> Trie {
     trie
 }
 
+/// Extract the completion context from a partial input line.
+///
+/// Returns `(words_before_cursor, prefix_being_typed)`.
+/// If the cursor is at a fresh word boundary (trailing space), `prefix` is `""`.
+///
+/// Uses the quote/escape-aware [`tokenizer::split_words`] so that
+/// quoted and escaped strings are handled consistently with execution
+/// tokenization.
+fn completion_context(input: &str) -> (Vec<String>, String) {
+    // Trailing unescaped space means the cursor is at a new-word position.
+    if input.ends_with(' ') && !input.ends_with("\\ ") {
+        let words = tokenizer::split_words(input);
+        return (words, String::new());
+    }
+
+    let words = tokenizer::split_words(input);
+    match words.split_last() {
+        Some((last, rest)) => (rest.to_vec(), last.clone()),
+        None => (vec![], String::new()),
+    }
+}
+
 /// Read a single line of input from the terminal.
 ///
 /// This enters raw mode so individual key-presses can be processed,
@@ -51,20 +74,21 @@ pub fn read_line() -> String {
     let mut line = String::new();
     let stdin = io::stdin();
     let mut byte = [0u8; 1];
-    let mut first_tab = false;
-    let mut first_space = false;
+    let mut tab_count: u32 = 0;
 
     loop {
         stdin.lock().read_exact(&mut byte).unwrap();
 
         match byte[0] {
             b'\t' => {
-                if first_space {
-                    first_tab = false;
+                tab_count += 1;
 
-                    handle_tab_files(&mut line /*, &mut first_tab*/)
+                let (prev_words, prefix) = completion_context(&line);
+
+                if prev_words.is_empty() {
+                    handle_tab_executable(&trie, &mut line, &prefix, tab_count);
                 } else {
-                    handle_tab_executable(&trie, &mut line, &mut first_tab)
+                    handle_tab_files(&mut line, &prev_words, &prefix, tab_count);
                 }
             }
             b'\r' | b'\n' => {
@@ -72,16 +96,16 @@ pub fn read_line() -> String {
                 println!();
                 return line;
             }
-            127 | 8 => handle_backspace(&mut line),
+            127 | 8 => {
+                handle_backspace(&mut line);
+                tab_count = 0;
+            }
             c if c >= 32 => {
-                if c == 32 {
-                    first_space = true;
-                }
                 let ch = c as char;
                 line.push(ch);
                 print!("{ch}");
                 io::stdout().flush().unwrap();
-                first_tab = false;
+                tab_count = 0;
             }
             _ => {}
         }
@@ -92,21 +116,21 @@ pub fn read_line() -> String {
 // Key handlers
 // ------------------------------------------------------------------
 
-/// Process a <Tab> press: attempt autocompletion on the current `line`.
-fn handle_tab_executable(trie: &Trie, line: &mut String, first_tab: &mut bool) {
-    let extension = trie.longest_common_extension(line);
-    let mut predictions = trie.autocomplete(line);
+/// Process a `<Tab>` press: attempt autocompletion for executable/command names.
+fn handle_tab_executable(trie: &Trie, line: &mut String, prefix: &str, tab_count: u32) {
+    let extension = trie.longest_common_extension(prefix);
+    let mut predictions = trie.autocomplete(prefix);
 
     if predictions.len() == 1 {
-        // if only 1 prediction exist
+        // Only one match — complete it and add a trailing space.
         *line = predictions.remove(0) + " ";
         print!("\r$ {line}");
     } else if let Some(ext) = extension {
-        // if more than one prediction exist, get the longest common string
+        // Multiple matches sharing a common extension — fill it in.
         line.push_str(&ext);
         print!("\r$ {line}");
-    } else if predictions.len() > 1 && *first_tab {
-        // if the two criteria above is not satisfied list the available prediction
+    } else if predictions.len() > 1 && tab_count >= 2 {
+        // Second tab with ambiguous completions — list them all.
         predictions.sort();
         io::stdout().flush().unwrap();
         print!("\n{}", predictions.join(" "));
@@ -115,21 +139,45 @@ fn handle_tab_executable(trie: &Trie, line: &mut String, first_tab: &mut bool) {
         print!("\x07"); // bell
     }
 
-    *first_tab = true;
     io::stdout().flush().unwrap();
 }
 
-fn handle_tab_files(line: &mut String /*, first_tab: &mut bool*/) {
-    let mut files = get_file_names(".").unwrap_or_default();
-    let mut trie = build_custom_trie(files.clone());
-    let mut parts = line.split_whitespace();
-    let first = parts.next().unwrap_or("");
-    let second = parts.next().unwrap_or("");
+/// Process a `<Tab>` press: attempt autocompletion for file (and directory) names.
+fn handle_tab_files(
+    line: &mut String,
+    prev_words: &[String],
+    prefix: &str,
+    tab_count: u32,
+) {
+    // TODO: When prefix contains '/', split into (directory, partial_name)
+    // and list entries from that directory instead of ".".
+    // e.g. "src/tok" → dir = "src", partial = "tok"
+    // This will also need to reconstruct the completed path with the
+    // directory prefix when writing back to `line`.
+    let files = get_file_names(".").unwrap_or_default();
+    let trie = build_custom_trie(files);
 
-    let mut predictions = trie.autocomplete(second);
-    if predictions.len() >= 1 {
-        *line = format!("{} {} ", first, predictions[0]);
+    let extension = trie.longest_common_extension(prefix);
+    let mut predictions = trie.autocomplete(prefix);
+
+    if predictions.len() == 1 {
+        // Single match — rebuild line with the completed filename.
+        let mut new_line = prev_words.join(" ");
+        new_line.push(' ');
+        new_line.push_str(&predictions[0]);
+        new_line.push(' ');
+        *line = new_line;
         print!("\r$ {}", line);
+    } else if let Some(ext) = extension {
+        // Multiple matches sharing a common extension — fill it in.
+        line.push_str(&ext);
+        print!("\r$ {line}");
+    } else if predictions.len() > 1 && tab_count >= 2 {
+        // Second tab with ambiguous completions — list them all.
+        predictions.sort();
+        io::stdout().flush().unwrap();
+        print!("\n{}", predictions.join(" "));
+        print!("\n$ {line}");
     } else {
         print!("\x07"); // bell
     }
