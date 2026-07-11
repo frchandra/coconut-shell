@@ -156,7 +156,9 @@ fn handle_tab_files(line: &mut String, prev_words: &[String], prefix: &str, tab_
         (base_directory, leaf) = prefix.split_at(idx + 1);
     }
 
-    let files = get_file_names(base_directory).unwrap_or_default();
+    let mut files = get_files_list(base_directory).unwrap_or_default();
+    let directories = get_directories_list(base_directory).unwrap_or_default();
+    files.extend(directories);
     let trie = build_custom_trie(files);
 
     let completion = trie.longest_common_extension(leaf);
@@ -165,7 +167,9 @@ fn handle_tab_files(line: &mut String, prev_words: &[String], prefix: &str, tab_
     if let Some(ext) = completion {
         // Multiple matches sharing a common extension — fill it in.
         line.push_str(&ext);
-        line.push(' ');
+        if !ext.rfind('/').is_some() {
+            line.push(' ');
+        }
         print!("\r$ {line}");
     } else if predictions.len() == 1 {
         // Single match — rebuild line with the completed filename.
@@ -189,13 +193,26 @@ fn handle_tab_files(line: &mut String, prev_words: &[String], prefix: &str, tab_
     io::stdout().flush().unwrap();
 }
 
-fn get_file_names(dir: &str) -> std::io::Result<Vec<String>> {
+fn get_files_list(dir: &str) -> std::io::Result<Vec<String>> {
     let mut names = Vec::new();
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         if entry.file_type()?.is_file() {
             if let Some(name) = entry.file_name().to_str() {
                 names.push(name.to_string());
+            }
+        }
+    }
+    Ok(names)
+}
+
+fn get_directories_list(dir: &str) -> std::io::Result<Vec<String>> {
+    let mut names = Vec::new();
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() {
+            if let Some(name) = entry.file_name().to_str() {
+                names.push(format!("{}/", name).to_string());
             }
         }
     }
