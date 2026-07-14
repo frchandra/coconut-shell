@@ -49,6 +49,7 @@ impl BuiltinRegistry {
         reg.register("type", builtin_type);
         reg.register("pwd", builtin_pwd);
         reg.register("cd", builtin_cd);
+        reg.register("complete", builtin_complete);
         reg
     }
 
@@ -123,4 +124,8 @@ fn builtin_cd(args: &[String], _ctx: &BuiltinContext) -> BuiltinResult {
     }
 
     BuiltinResult::Output(CmdOutput::empty())
+}
+
+fn builtin_complete(args: &[String], _ctx: &BuiltinContext) -> BuiltinResult {
+    BuiltinResult::Output(CmdOutput::out("complete: not implemented".to_string()))
 }
