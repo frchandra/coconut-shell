@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fmt::format;
 use std::path::PathBuf;
@@ -15,8 +16,24 @@ use crate::utils;
 ///
 /// Contains read-only information the builtin might need (e.g. the
 /// list of registered builtin names for the `type` command).
-pub struct BuiltinContext<'a> {
-    pub builtin_names: &'a [&'a str],
+///
+/// This struct is constructed once from a [`BuiltinRegistry`] and
+/// shared for the entire lifetime of the shell.
+pub struct BuiltinContext {
+    pub builtin_names: Vec<String>,
+    /// Mutable at runtime via interior mutability (`RefCell`).
+    /// Use `.borrow()` to read and `.borrow_mut()` to write.
+    pub completion: RefCell<HashMap<String, String>>,
+}
+
+impl BuiltinContext {
+    /// Build a context from the current state of a [`BuiltinRegistry`].
+    pub fn from_registry(registry: &BuiltinRegistry) -> Self {
+        Self {
+            builtin_names: registry.names().into_iter().map(|s| s.to_owned()).collect(),
+            completion: RefCell::new(HashMap::new()),
+        }
+    }
 }
 
 /// The result of running a builtin command.
@@ -92,7 +109,7 @@ fn builtin_echo(args: &[String], _ctx: &BuiltinContext) -> BuiltinResult {
 fn builtin_type(args: &[String], ctx: &BuiltinContext) -> BuiltinResult {
     let name = args.join(" ");
 
-    if ctx.builtin_names.contains(&name.as_str()) {
+    if ctx.builtin_names.iter().any(|n| n == &name) {
         return BuiltinResult::Output(CmdOutput::out(format!("{name} is a shell builtin")));
     }
 
@@ -127,12 +144,25 @@ fn builtin_cd(args: &[String], _ctx: &BuiltinContext) -> BuiltinResult {
     BuiltinResult::Output(CmdOutput::empty())
 }
 
-fn builtin_complete(args: &[String], _ctx: &BuiltinContext) -> BuiltinResult {
+fn builtin_complete(args: &[String], ctx: &BuiltinContext) -> BuiltinResult {
     if args[0] == "-p" {
-        return BuiltinResult::Output(CmdOutput::out(format!(
-            "complete: {}: no completion specification",
-            args[1]
-        )));
+        // let value = ctx.completion.borrow().get().unwrap_or(&"".to_string()).clone();
+        if let Some(value) = ctx.completion.borrow().get(args[1].as_str()) {
+            return BuiltinResult::Output(CmdOutput::out(format!(
+                "complete -C '{}' {}",
+                value, args[1]
+            )));
+        } else {
+            return BuiltinResult::Output(CmdOutput::err(format!(
+                "complete: {}: no completion specification",
+                args[1]
+            )));
+        }
     }
-    BuiltinResult::Output(CmdOutput::out("complete: not implemented".to_string()))
+    if args[0] == "-C" {
+        ctx.completion
+            .borrow_mut()
+            .insert(args[2].clone(), args[1].clone());
+    }
+    BuiltinResult::Output(CmdOutput::empty())
 }

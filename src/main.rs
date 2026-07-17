@@ -10,6 +10,7 @@ pub(crate) mod trie;
 
 fn main() {
     let registry = builtins::BuiltinRegistry::new();
+    let ctx = builtins::BuiltinContext::from_registry(&registry);
 
     loop {
         let result = readline::read_line();
@@ -20,7 +21,7 @@ fn main() {
             continue;
         }
 
-        if !executor::execute(&pipeline, &registry) {
+        if !executor::execute(&pipeline, &registry, &ctx) {
             break;
         }
     }

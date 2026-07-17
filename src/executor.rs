@@ -10,22 +10,16 @@ use crate::utils;
 /// successive [`SimpleCommand`]s.
 ///
 /// Returns `true` if the shell should continue, `false` to exit.
-pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry) -> bool {
+pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &BuiltinContext) -> bool {
     // For now, handle only the first command.
     let cmd = match pipeline.commands.first() {
         Some(c) => c,
         None => return true,
     };
 
-    let builtin_names = registry.names();
-    let names_ref: Vec<&str> = builtin_names.to_vec();
-    let ctx = BuiltinContext {
-        builtin_names: &names_ref,
-    };
-
     // Try builtin first, then fall back to external.
     let (output, should_continue) = if let Some(func) = registry.get(&cmd.program) {
-        match func(&cmd.args, &ctx) {
+        match func(&cmd.args, ctx) {
             BuiltinResult::Exit => return false,
             BuiltinResult::Output(out) => (out, true),
         }
