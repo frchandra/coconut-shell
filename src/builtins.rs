@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::env;
+use std::fmt::format;
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -127,5 +128,11 @@ fn builtin_cd(args: &[String], _ctx: &BuiltinContext) -> BuiltinResult {
 }
 
 fn builtin_complete(args: &[String], _ctx: &BuiltinContext) -> BuiltinResult {
+    if args[0] == "-p" {
+        return BuiltinResult::Output(CmdOutput::out(format!(
+            "complete: {}: no completion specification",
+            args[1]
+        )));
+    }
     BuiltinResult::Output(CmdOutput::out("complete: not implemented".to_string()))
 }
