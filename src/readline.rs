@@ -2,6 +2,7 @@ use std::fs;
 use std::io::{self, Read, Write};
 
 use crate::builtins;
+use crate::builtins::BuiltinContext;
 use crate::utils::get_path_executables_deduped;
 
 use crate::terminal;
@@ -65,7 +66,7 @@ fn completion_context(input: &str) -> (Vec<String>, String) {
 /// This enters raw mode so individual key-presses can be processed,
 /// providing tab-completion via a [`Trie`] built from builtin commands
 /// and `$PATH` executables.  Raw mode is restored before returning.
-pub fn read_line() -> String {
+pub fn read_line(ctx: &BuiltinContext) -> String {
     let trie = build_completion_trie();
 
     terminal::set_raw_mode(true).expect("failed to enable raw mode");
@@ -85,7 +86,9 @@ pub fn read_line() -> String {
 
                 let (prev_words, prefix) = completion_context(&line);
 
-                if prev_words.is_empty() {
+                if is_completion_exist(&prev_words[0], ctx) {
+                    handle_tab_completion(&mut line, &prev_words[0], ctx);
+                } else if prev_words.is_empty() {
                     handle_tab_executable(&trie, &mut line, &prefix, tab_count);
                 } else {
                     handle_tab_files(&mut line, &prev_words, &prefix, tab_count);
@@ -189,6 +192,30 @@ fn handle_tab_files(line: &mut String, prev_words: &[String], prefix: &str, tab_
     } else {
         print!("\x07"); // bell
     }
+
+    io::stdout().flush().unwrap();
+}
+
+fn is_completion_exist(first_cmd: &str, ctx: &BuiltinContext) -> bool {
+    if ctx.completion.borrow().get(first_cmd).is_none() {
+        return false;
+    }
+    true
+}
+
+fn handle_tab_completion(line: &mut String, first_cmd: &str, ctx: &BuiltinContext) {
+    let executable_loc = ctx.completion.borrow().get(first_cmd).unwrap().clone();
+    // let executable_loc = String::from("/test/salah");
+    let executable_output = std::process::Command::new(&executable_loc)
+        .output()
+        .expect("Failed to execute command");
+    let output_str = String::from_utf8_lossy(&executable_output.stdout)
+        .trim_end()
+        .to_string();
+
+    line.push_str(&output_str);
+    line.push(' ');
+    print!("\n$ git commit ");
 
     io::stdout().flush().unwrap();
 }
