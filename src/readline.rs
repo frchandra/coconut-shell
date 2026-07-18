@@ -84,12 +84,12 @@ pub fn read_line(ctx: &BuiltinContext) -> String {
             b'\t' => {
                 tab_count += 1;
 
-                let (prev_words, prefix) = completion_context(&line);
+                let (mut prev_words, prefix) = completion_context(&line);
 
-                if is_completion_exist(&prev_words[0], ctx) {
-                    handle_tab_completion(&mut line, &prev_words[0], ctx);
-                } else if prev_words.is_empty() {
+                if prev_words.is_empty() {
                     handle_tab_executable(&trie, &mut line, &prefix, tab_count);
+                } else if is_completion_exist(&prev_words[0], ctx) {
+                    handle_tab_completion(&mut line, &prev_words[0], ctx);
                 } else {
                     handle_tab_files(&mut line, &prev_words, &prefix, tab_count);
                 }
@@ -213,10 +213,10 @@ fn handle_tab_completion(line: &mut String, first_cmd: &str, ctx: &BuiltinContex
         .trim_end()
         .to_string();
 
-    line.push_str(&output_str);
-    line.push(' ');
-    print!("\n$ git commit ");
-
+    // line.push_str(&output_str);
+    // line.push(' ');
+    io::stdout().flush().unwrap();
+    print!("{output_str} ");
     io::stdout().flush().unwrap();
 }
 
