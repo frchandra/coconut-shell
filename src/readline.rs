@@ -39,28 +39,6 @@ fn build_custom_trie(names: Vec<String>) -> Trie {
     trie
 }
 
-/// Extract the completion context from a partial input line.
-///
-/// Returns `(words_before_cursor, prefix_being_typed)`.
-/// If the cursor is at a fresh word boundary (trailing space), `prefix` is `""`.
-///
-/// Uses the quote/escape-aware [`tokenizer::split_words`] so that
-/// quoted and escaped strings are handled consistently with execution
-/// tokenization.
-fn completion_context(input: &str) -> (Vec<String>, String) {
-    // Trailing unescaped space means the cursor is at a new-word position.
-    if input.ends_with(' ') && !input.ends_with("\\ ") {
-        let words = tokenizer::split_words(input);
-        return (words, String::new());
-    }
-
-    let words = tokenizer::split_words(input);
-    match words.split_last() {
-        Some((last, rest)) => (rest.to_vec(), last.clone()),
-        None => (vec![], String::new()),
-    }
-}
-
 /// Read a single line of input from the terminal.
 ///
 /// This enters raw mode so individual key-presses can be processed,
@@ -84,7 +62,7 @@ pub fn read_line(ctx: &BuiltinContext) -> String {
             b'\t' => {
                 tab_count += 1;
 
-                let (mut prev_words, prefix) = completion_context(&line);
+                let (mut prev_words, prefix) = get_completion_context(&line);
 
                 if prev_words.is_empty() {
                     handle_tab_executable(&trie, &mut line, &prefix, tab_count);
@@ -196,28 +174,41 @@ fn handle_tab_files(line: &mut String, prev_words: &[String], prefix: &str, tab_
     io::stdout().flush().unwrap();
 }
 
+/// Process a backspace / delete-backward press.
+fn handle_backspace(line: &mut String) {
+    if line.pop().is_some() {
+        print!("\x08 \x08");
+    } else {
+        print!("\x07"); // bell
+    }
+    io::stdout().flush().unwrap();
+}
+
+fn handle_tab_completion(line: &mut String, first_cmd: &str, ctx: &BuiltinContext) {
+    let executable_loc = ctx.completion.borrow().get(first_cmd).unwrap().clone();
+    let executable_output = std::process::Command::new(&executable_loc)
+        .output()
+        .expect("Failed to execute command");
+    if executable_output.stdout.is_empty() {
+        io::stdout().flush().unwrap();
+        print!("\x07"); // bell
+
+        return;
+    }
+
+    let output_str = String::from_utf8_lossy(&executable_output.stdout)
+        .trim_end()
+        .to_string();
+    io::stdout().flush().unwrap();
+    print!("{output_str} ");
+
+}
+
 fn is_completion_exist(first_cmd: &str, ctx: &BuiltinContext) -> bool {
     if ctx.completion.borrow().get(first_cmd).is_none() {
         return false;
     }
     true
-}
-
-fn handle_tab_completion(line: &mut String, first_cmd: &str, ctx: &BuiltinContext) {
-    let executable_loc = ctx.completion.borrow().get(first_cmd).unwrap().clone();
-    // let executable_loc = String::from("/test/salah");
-    let executable_output = std::process::Command::new(&executable_loc)
-        .output()
-        .expect("Failed to execute command");
-    let output_str = String::from_utf8_lossy(&executable_output.stdout)
-        .trim_end()
-        .to_string();
-
-    // line.push_str(&output_str);
-    // line.push(' ');
-    io::stdout().flush().unwrap();
-    print!("{output_str} ");
-    io::stdout().flush().unwrap();
 }
 
 fn get_files_list(dir: &str) -> std::io::Result<Vec<String>> {
@@ -246,12 +237,24 @@ fn get_directories_list(dir: &str) -> std::io::Result<Vec<String>> {
     Ok(names)
 }
 
-/// Process a backspace / delete-backward press.
-fn handle_backspace(line: &mut String) {
-    if line.pop().is_some() {
-        print!("\x08 \x08");
-    } else {
-        print!("\x07"); // bell
+/// Extract the completion context from a partial input line.
+///
+/// Returns `(words_before_cursor, prefix_being_typed)`.
+/// If the cursor is at a fresh word boundary (trailing space), `prefix` is `""`.
+///
+/// Uses the quote/escape-aware [`tokenizer::split_words`] so that
+/// quoted and escaped strings are handled consistently with execution
+/// tokenization.
+fn get_completion_context(input: &str) -> (Vec<String>, String) {
+    // Trailing unescaped space means the cursor is at a new-word position.
+    if input.ends_with(' ') && !input.ends_with("\\ ") {
+        let words = tokenizer::split_words(input);
+        return (words, String::new());
     }
-    io::stdout().flush().unwrap();
+
+    let words = tokenizer::split_words(input);
+    match words.split_last() {
+        Some((last, rest)) => (rest.to_vec(), last.clone()),
+        None => (vec![], String::new()),
+    }
 }

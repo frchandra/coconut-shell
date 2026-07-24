@@ -1,2 +1,2 @@
 #!/usr/bin/env python3
-print("run")
+exit(0)
