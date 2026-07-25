@@ -67,7 +67,7 @@ pub fn read_line(ctx: &BuiltinContext) -> String {
                 if prev_words.is_empty() {
                     handle_tab_executable(&trie, &mut line, &prefix, tab_count);
                 } else if is_completion_exist(&prev_words[0], ctx) {
-                    handle_tab_completion(&mut line, &prev_words[0], ctx);
+                    handle_tab_completion(prefix, &prev_words, ctx);
                 } else {
                     handle_tab_files(&mut line, &prev_words, &prefix, tab_count);
                 }
@@ -184,24 +184,39 @@ fn handle_backspace(line: &mut String) {
     io::stdout().flush().unwrap();
 }
 
-fn handle_tab_completion(line: &mut String, first_cmd: &str, ctx: &BuiltinContext) {
-    let executable_loc = ctx.completion.borrow().get(first_cmd).unwrap().clone();
+fn handle_tab_completion(last_word: String, prev_words: &Vec<String>, ctx: &BuiltinContext) {
+    let executable_loc = ctx.completion.borrow().get(&prev_words[0]).unwrap().clone();
+
+    let mut arguments: Vec<String> = Vec::new();
+    if prev_words.len() < 2 {
+        arguments = vec![prev_words[0].clone(), last_word.clone(), "".to_string()];
+    } else {
+        arguments = vec![
+            prev_words[0].clone(),
+            last_word.clone(),
+            prev_words[1].clone(),
+        ];
+    }
     let executable_output = std::process::Command::new(&executable_loc)
+        .args(arguments) //prev_words[0] prefix prev_words[1]
         .output()
         .expect("Failed to execute command");
     if executable_output.stdout.is_empty() {
-        io::stdout().flush().unwrap();
         print!("\x07"); // bell
-
+        io::stdout().flush().unwrap();
         return;
     }
 
     let output_str = String::from_utf8_lossy(&executable_output.stdout)
         .trim_end()
         .to_string();
-    io::stdout().flush().unwrap();
-    print!("{output_str} ");
 
+    let completion = output_str
+        .strip_prefix(last_word.as_str())
+        .unwrap_or(output_str.as_str());
+
+    print!("{completion} ");
+    io::stdout().flush().unwrap();
 }
 
 fn is_completion_exist(first_cmd: &str, ctx: &BuiltinContext) -> bool {
