@@ -1,5 +1,5 @@
-use std::fs;
 use std::io::{self, Read, Write};
+use std::{env, fs};
 
 use crate::builtins;
 use crate::builtins::BuiltinContext;
@@ -67,7 +67,7 @@ pub fn read_line(ctx: &BuiltinContext) -> String {
                 if prev_words.is_empty() {
                     handle_tab_executable(&trie, &mut line, &prefix, tab_count);
                 } else if is_completion_exist(&prev_words[0], ctx) {
-                    handle_tab_completion(prefix, &prev_words, ctx);
+                    handle_tab_completion(&line, prefix, &prev_words, ctx);
                 } else {
                     handle_tab_files(&mut line, &prev_words, &prefix, tab_count);
                 }
@@ -184,8 +184,18 @@ fn handle_backspace(line: &mut String) {
     io::stdout().flush().unwrap();
 }
 
-fn handle_tab_completion(last_word: String, prev_words: &Vec<String>, ctx: &BuiltinContext) {
+fn handle_tab_completion(
+    line: &String,
+    last_word: String,
+    prev_words: &Vec<String>,
+    ctx: &BuiltinContext,
+) {
     let executable_loc = ctx.completion.borrow().get(&prev_words[0]).unwrap().clone();
+
+    unsafe {
+        env::set_var("COMP_LINE", line);
+        env::set_var("COMP_POINT", line.len().to_string());
+    }
 
     let mut arguments: Vec<String> = Vec::new();
     if prev_words.len() < 2 {
