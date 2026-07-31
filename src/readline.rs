@@ -1,4 +1,4 @@
-use std::io::{self, Read, Write};
+use std::io::{self, BufRead, Read, Write};
 use std::{env, fs};
 
 use crate::builtins;
@@ -67,7 +67,7 @@ pub fn read_line(ctx: &BuiltinContext) -> String {
                 if prev_words.is_empty() {
                     handle_tab_executable(&trie, &mut line, &prefix, tab_count);
                 } else if is_completion_exist(&prev_words[0], ctx) {
-                    handle_tab_completion(&line, prefix, &prev_words, ctx);
+                    handle_tab_completion(&line, prefix, &prev_words, tab_count, ctx);
                 } else {
                     handle_tab_files(&mut line, &prev_words, &prefix, tab_count);
                 }
@@ -188,6 +188,7 @@ fn handle_tab_completion(
     line: &String,
     last_word: String,
     prev_words: &Vec<String>,
+    tab_count: u32,
     ctx: &BuiltinContext,
 ) {
     let executable_loc = ctx.completion.borrow().get(&prev_words[0]).unwrap().clone();
@@ -199,7 +200,11 @@ fn handle_tab_completion(
 
     let mut arguments: Vec<String> = Vec::new();
     if prev_words.len() < 2 {
-        arguments = vec![prev_words[0].clone(), last_word.clone(), "".to_string()];
+        arguments = vec![
+            prev_words[0].clone(),
+            last_word.clone(),
+            prev_words[0].clone(),
+        ];
     } else {
         arguments = vec![
             prev_words[0].clone(),
@@ -211,22 +216,25 @@ fn handle_tab_completion(
         .args(arguments) //prev_words[0] prefix prev_words[1]
         .output()
         .expect("Failed to execute command");
-    if executable_output.stdout.is_empty() {
+    let output_data: Vec<String> = String::from_utf8_lossy(&executable_output.stdout)
+        .lines()
+        .map(|x| x.to_string())
+        .collect();
+
+    if output_data.is_empty() || (output_data.len() > 1 && tab_count < 2) {
         print!("\x07"); // bell
         io::stdout().flush().unwrap();
         return;
+    } else if output_data.len() > 1 && tab_count >= 2 {
+        println!("\n{}\n$ {}", output_data.join(" ").to_string(), line);
+        io::stdout().flush().unwrap();
+    } else {
+        let completion = output_data[0]
+            .strip_prefix(last_word.as_str())
+            .unwrap_or(output_data[0].as_str());
+        print!("{completion} ");
+        io::stdout().flush().unwrap();
     }
-
-    let output_str = String::from_utf8_lossy(&executable_output.stdout)
-        .trim_end()
-        .to_string();
-
-    let completion = output_str
-        .strip_prefix(last_word.as_str())
-        .unwrap_or(output_str.as_str());
-
-    print!("{completion} ");
-    io::stdout().flush().unwrap();
 }
 
 fn is_completion_exist(first_cmd: &str, ctx: &BuiltinContext) -> bool {
