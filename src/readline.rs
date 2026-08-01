@@ -67,7 +67,7 @@ pub fn read_line(ctx: &BuiltinContext) -> String {
                 if prev_words.is_empty() {
                     handle_tab_executable(&trie, &mut line, &prefix, tab_count);
                 } else if is_completion_exist(&prev_words[0], ctx) {
-                    handle_tab_completion(&line, prefix, &prev_words, tab_count, ctx);
+                    handle_tab_completion(&mut line, prefix, &prev_words, tab_count, ctx);
                 } else {
                     handle_tab_files(&mut line, &prev_words, &prefix, tab_count);
                 }
@@ -185,7 +185,7 @@ fn handle_backspace(line: &mut String) {
 }
 
 fn handle_tab_completion(
-    line: &String,
+    line: &mut String,
     last_word: String,
     prev_words: &Vec<String>,
     tab_count: u32,
@@ -194,7 +194,7 @@ fn handle_tab_completion(
     let executable_loc = ctx.completion.borrow().get(&prev_words[0]).unwrap().clone();
 
     unsafe {
-        env::set_var("COMP_LINE", line);
+        env::set_var("COMP_LINE", line.clone());
         env::set_var("COMP_POINT", line.len().to_string());
     }
 
@@ -221,10 +221,20 @@ fn handle_tab_completion(
         .map(|x| x.to_string())
         .collect();
 
-    if output_data.is_empty() || (output_data.len() > 1 && tab_count < 2) {
+    if output_data.is_empty() {
         print!("\x07"); // bell
         io::stdout().flush().unwrap();
-        return;
+    } else if output_data.len() > 1 && tab_count < 2 {
+        let trie = build_custom_trie(output_data);
+        let completion = trie.longest_common_extension(last_word.as_str());
+        if completion.is_some() {
+            line.push_str(&completion.clone().unwrap());
+            print!("{}", &completion.unwrap());
+            io::stdout().flush().unwrap();
+        } else {
+            print!("\x07"); // bell
+            io::stdout().flush().unwrap();
+        }
     } else if output_data.len() > 1 && tab_count >= 2 {
         println!("\n{}\n$ {}", output_data.join(" ").to_string(), line);
         io::stdout().flush().unwrap();
