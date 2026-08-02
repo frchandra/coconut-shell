@@ -68,6 +68,7 @@ impl BuiltinRegistry {
         reg.register("pwd", builtin_pwd);
         reg.register("cd", builtin_cd);
         reg.register("complete", builtin_complete);
+        reg.register("jobs", builtin_jobs);
         reg
     }
 
@@ -165,5 +166,9 @@ fn builtin_complete(args: &[String], ctx: &BuiltinContext) -> BuiltinResult {
     } else if args[0] == "-r" {
         ctx.completion.borrow_mut().remove(args[1].as_str());
     }
+    BuiltinResult::Output(CmdOutput::empty())
+}
+
+fn builtin_jobs(args: &[String], ctx: &BuiltinContext) -> BuiltinResult {
     BuiltinResult::Output(CmdOutput::empty())
 }
