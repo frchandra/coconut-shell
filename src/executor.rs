@@ -11,11 +11,18 @@ use crate::utils;
 ///
 /// Returns `true` if the shell should continue, `false` to exit.
 pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &BuiltinContext) -> bool {
-    // For now, handle only the first command.
+    // For now, handle only the first command. because pipeline || has not been implemented yet.
     let cmd = match pipeline.commands.first() {
         Some(c) => c,
         None => return true,
     };
+
+    if cmd.is_background{
+
+        return true;
+    }
+
+
 
     // Try builtin first, then fall back to external.
     let (output, should_continue) = if let Some(func) = registry.get(&cmd.program) {
@@ -24,9 +31,8 @@ pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &BuiltinCon
             BuiltinResult::Output(out) => (out, true),
         }
     } else {
-        (run_external(&cmd.program, &cmd.args), true)
+            (run_external(&cmd.program, &cmd.args), true)
     };
-
     apply_redirects(&output, &cmd.redirects);
     should_continue
 }

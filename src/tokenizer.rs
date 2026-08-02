@@ -11,6 +11,7 @@ pub enum Token {
     Word(String),
     Pipe,
     Redirect { fd: u32, mode: RedirectMode },
+    Ampersand,
 }
 
 /// Tokenize a raw input line into a sequence of [`Token`]s.
@@ -43,6 +44,7 @@ fn classify(word: String) -> Token {
             fd: 2,
             mode: RedirectMode::Append,
         },
+        "&" => Token::Ampersand,
         _ => Token::Word(word),
     }
 }

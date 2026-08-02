@@ -1,3 +1,5 @@
+use crate::tokenizer::Token;
+
 mod builtins;
 mod executor;
 mod parser;
@@ -20,6 +22,8 @@ fn main() {
         if pipeline.is_empty() {
             continue;
         }
+
+
 
         if !executor::execute(&pipeline, &registry, &ctx) {
             break;

@@ -14,6 +14,7 @@ pub struct SimpleCommand {
     pub program: String,
     pub args: Vec<String>,
     pub redirects: Vec<Redirect>,
+    pub is_background: bool,
 }
 
 /// A pipeline of one or more [`SimpleCommand`]s connected by pipes.
@@ -71,6 +72,20 @@ pub fn parse(tokens: Vec<Token>) -> Pipeline {
                         program: prog,
                         args: std::mem::take(&mut args),
                         redirects: std::mem::take(&mut redirects),
+                        is_background: true,
+                    });
+                }
+            }
+
+            // this can be further chained latter
+            Token::Ampersand => {
+                // Run current command in the background and start a fresh one.
+                if let Some(prog) = program.take() {
+                    commands.push(SimpleCommand {
+                        program: prog, // implicit std::mem::take had already handled by Option<>
+                        args: std::mem::take(&mut args), // we use std::mem::take because we push an outside loop variable multiple times, so we need to 'clear' it after each push
+                        redirects: std::mem::take(&mut redirects),
+                        is_background: true,
                     });
                 }
             }
@@ -83,6 +98,7 @@ pub fn parse(tokens: Vec<Token>) -> Pipeline {
             program: prog,
             args,
             redirects,
+            is_background: false,
         });
     }
 
