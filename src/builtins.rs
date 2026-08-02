@@ -158,11 +158,12 @@ fn builtin_complete(args: &[String], ctx: &BuiltinContext) -> BuiltinResult {
                 args[1]
             )));
         }
-    }
-    if args[0] == "-C" {
+    } else if args[0] == "-C" {
         ctx.completion
             .borrow_mut()
             .insert(args[2].clone(), args[1].clone());
+    } else if args[0] == "-r" {
+        ctx.completion.borrow_mut().remove(args[1].as_str());
     }
     BuiltinResult::Output(CmdOutput::empty())
 }
