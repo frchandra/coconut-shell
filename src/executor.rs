@@ -1,6 +1,6 @@
 use crate::builtins::{BuiltinContext, BuiltinRegistry, BuiltinResult};
 use crate::parser::Pipeline;
-use crate::redirect::{apply_redirects, CmdOutput};
+use crate::redirect::{CmdOutput, apply_redirects};
 use crate::utils;
 
 /// Run a [`Pipeline`].
@@ -17,21 +17,29 @@ pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &BuiltinCon
         None => return true,
     };
 
-    if cmd.is_background{
-
-        return true;
-    }
-
-
-
     // Try builtin first, then fall back to external.
     let (output, should_continue) = if let Some(func) = registry.get(&cmd.program) {
         match func(&cmd.args, ctx) {
+            // todo: background function for this (for maximum edge case coverage)
             BuiltinResult::Exit => return false,
             BuiltinResult::Output(out) => (out, true),
         }
     } else {
+        if !cmd.is_background {
             (run_external(&cmd.program, &cmd.args), true)
+        } else {
+            let result = run_external_background(&cmd.program, &cmd.args);
+            match result {
+                Ok(pid) => {
+                    println!("[1] {}", pid);
+                    (CmdOutput::empty(), true)
+                }
+                Err(err) => {
+                    eprintln!("{}", err);
+                    (CmdOutput::err(err), true)
+                }
+            }
+        }
     };
     apply_redirects(&output, &cmd.redirects);
     should_continue
@@ -71,4 +79,20 @@ fn run_external(command: &str, args: &[String]) -> CmdOutput {
             )
         },
     }
+}
+
+fn run_external_background(command: &str, args: &[String]) -> Result<u32, String> {
+    let path = match utils::find_executable_in_path(command) {
+        Some(p) => p,
+        None => {
+            return Err(format!("{command}: command not found"));
+        }
+    };
+
+    let child = std::process::Command::new(path.file_name().unwrap())
+        .args(args)
+        .spawn()
+        .map_err(|e| format!("{command}: failed to start ({e})"))?;
+
+    Ok(child.id())
 }
