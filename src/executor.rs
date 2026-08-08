@@ -18,28 +18,36 @@ pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &BuiltinCon
     };
 
     // Try builtin first, then fall back to external.
-    let (output, should_continue) = if let Some(func) = registry.get(&cmd.program) {
-        match func(&cmd.args, ctx) {
-            // todo: background function for this (for maximum edge case coverage)
+    let (output, should_continue) = match (registry.get(&cmd.program), cmd.is_background) {
+        (Some(func), true) => {
+            let args = cmd.args.clone();
+            let ctx = ctx.clone();
+            let redirects = cmd.redirects.clone();
+            let handle = std::thread::spawn(move || {
+                if let BuiltinResult::Output(out) = func(&args, &ctx) {
+                    apply_redirects(&out, &redirects);
+                }
+            });
+            let tid_str = format!("{:?}", handle.thread().id());
+            let pid = tid_str.replace("ThreadId(", "").replace(")", "");
+            println!("[1] {}", pid);
+            (CmdOutput::empty(), true)
+        }
+        (Some(func), false) => match func(&cmd.args, ctx) {
             BuiltinResult::Exit => return false,
             BuiltinResult::Output(out) => (out, true),
-        }
-    } else {
-        if !cmd.is_background {
-            (run_external(&cmd.program, &cmd.args), true)
-        } else {
-            let result = run_external_background(&cmd.program, &cmd.args);
-            match result {
-                Ok(pid) => {
-                    println!("[1] {}", pid);
-                    (CmdOutput::empty(), true)
-                }
-                Err(err) => {
-                    eprintln!("{}", err);
-                    (CmdOutput::err(err), true)
-                }
+        },
+        (None, true) => match run_external_background(&cmd.program, &cmd.args) {
+            Ok(pid) => {
+                println!("[1] {}", pid);
+                (CmdOutput::empty(), true)
             }
-        }
+            Err(err) => {
+                eprintln!("{}", err);
+                (CmdOutput::err(err), true)
+            }
+        },
+        (None, false) => (run_external(&cmd.program, &cmd.args), true),
     };
     apply_redirects(&output, &cmd.redirects);
     should_continue

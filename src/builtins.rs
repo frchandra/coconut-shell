@@ -19,6 +19,7 @@ use crate::utils;
 ///
 /// This struct is constructed once from a [`BuiltinRegistry`] and
 /// shared for the entire lifetime of the shell.
+#[derive(Clone)]
 pub struct BuiltinContext {
     pub builtin_names: Vec<String>,
     /// Mutable at runtime via interior mutability (`RefCell`).

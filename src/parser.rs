@@ -1,7 +1,7 @@
 use crate::tokenizer::{RedirectMode, Token};
 
 /// A single I/O redirection (e.g. `2> errors.log`).
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Redirect {
     pub fd: u32,
     pub mode: RedirectMode,
@@ -9,7 +9,7 @@ pub struct Redirect {
 }
 
 /// A simple command: a program name, arguments, and zero or more redirections.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SimpleCommand {
     pub program: String,
     pub args: Vec<String>,
