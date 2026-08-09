@@ -173,3 +173,20 @@ fn builtin_complete(args: &[String], ctx: &BuiltinContext) -> BuiltinResult {
 fn builtin_jobs(args: &[String], ctx: &BuiltinContext) -> BuiltinResult {
     BuiltinResult::Output(CmdOutput::empty())
 }
+
+pub fn run_background_builtin(
+    func: BuiltinFn,
+    args: Vec<String>,
+    ctx: BuiltinContext,
+    redirects: Vec<crate::parser::Redirect>,
+) -> CmdOutput {
+    let handle = std::thread::spawn(move || {
+        if let BuiltinResult::Output(out) = func(&args, &ctx) {
+            crate::redirect::apply_redirects(&out, &redirects);
+        }
+    });
+    let tid_str = format!("{:?}", handle.thread().id());
+    let pid = tid_str.replace("ThreadId(", "").replace(")", "");
+    println!("[1] {}", pid);
+    CmdOutput::empty()
+}

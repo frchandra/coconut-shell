@@ -23,15 +23,8 @@ pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &BuiltinCon
             let args = cmd.args.clone();
             let ctx = ctx.clone();
             let redirects = cmd.redirects.clone();
-            let handle = std::thread::spawn(move || {
-                if let BuiltinResult::Output(out) = func(&args, &ctx) {
-                    apply_redirects(&out, &redirects);
-                }
-            });
-            let tid_str = format!("{:?}", handle.thread().id());
-            let pid = tid_str.replace("ThreadId(", "").replace(")", "");
-            println!("[1] {}", pid);
-            (CmdOutput::empty(), true)
+            let out = crate::builtins::run_background_builtin(func, args, ctx, redirects);
+            (out, true)
         }
         (Some(func), false) => match func(&cmd.args, ctx) {
             BuiltinResult::Exit => return false,
