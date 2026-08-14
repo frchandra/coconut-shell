@@ -1,4 +1,5 @@
-use crate::builtins::{BuiltinContext, BuiltinRegistry, BuiltinResult};
+use crate::builtins::{BuiltinRegistry, BuiltinResult};
+use crate::context::RuntimeContext;
 use crate::parser::Pipeline;
 use crate::redirect::{CmdOutput, apply_redirects};
 use crate::utils;
@@ -10,7 +11,7 @@ use crate::utils;
 /// successive [`SimpleCommand`]s.
 ///
 /// Returns `true` if the shell should continue, `false` to exit.
-pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &BuiltinContext) -> bool {
+pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &RuntimeContext) -> bool {
     // For now, handle only the first command. because pipeline || has not been implemented yet.
     let cmd = match pipeline.commands.first() {
         Some(c) => c,
@@ -21,9 +22,9 @@ pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &BuiltinCon
     let (output, should_continue) = match (registry.get(&cmd.program), cmd.is_background) {
         (Some(func), true) => {
             let args = cmd.args.clone();
-            let ctx = ctx.clone();
+            let cloned_ctx = ctx.clone();
             let redirects = cmd.redirects.clone();
-            let out = crate::builtins::run_background_builtin(func, args, ctx, redirects);
+            let out = crate::builtins::run_background_builtin(func, args, cloned_ctx, redirects);
             (out, true)
         }
         (Some(func), false) => match func(&cmd.args, ctx) {
@@ -33,6 +34,18 @@ pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &BuiltinCon
         (None, true) => match run_external_background(&cmd.program, &cmd.args) {
             Ok(pid) => {
                 println!("[1] {}", pid);
+                // todo wrap this on a separate func
+                let status = format!("{:<24}", "Running");
+                ctx.jobs.lock().unwrap().job.insert(
+                    // pid,
+                    1,
+                    crate::jobs::Job {
+                        status: status.as_bytes().try_into().unwrap(),
+                        command: format!("{} {}", cmd.program, cmd.args.join(" ")),
+                    },
+                );
+                // ctx.jobs.lock().unwrap().recent_job_id = pid;
+                ctx.jobs.lock().unwrap().recent_job_id = 1;
                 (CmdOutput::empty(), true)
             }
             Err(err) => {

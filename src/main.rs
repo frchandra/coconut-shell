@@ -1,7 +1,7 @@
-use crate::tokenizer::Token;
-
 mod builtins;
+mod context;
 mod executor;
+mod jobs;
 mod parser;
 mod readline;
 mod redirect;
@@ -12,7 +12,7 @@ mod utils;
 
 fn main() {
     let registry = builtins::BuiltinRegistry::new();
-    let ctx = builtins::BuiltinContext::from_registry(&registry);
+    let ctx = context::RuntimeContext::new(&registry);
 
     loop {
         let result = readline::read_line(&ctx);
@@ -22,8 +22,6 @@ fn main() {
         if pipeline.is_empty() {
             continue;
         }
-
-
 
         if !executor::execute(&pipeline, &registry, &ctx) {
             break;

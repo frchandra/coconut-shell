@@ -1,8 +1,8 @@
-use std::io::{self, BufRead, Read, Write};
+use std::io::{self, Read, Write};
 use std::{env, fs};
 
 use crate::builtins;
-use crate::builtins::BuiltinContext;
+use crate::context::RuntimeContext;
 use crate::utils::get_path_executables_deduped;
 
 use crate::terminal;
@@ -44,7 +44,7 @@ fn build_custom_trie(names: Vec<String>) -> Trie {
 /// This enters raw mode so individual key-presses can be processed,
 /// providing tab-completion via a [`Trie`] built from builtin commands
 /// and `$PATH` executables.  Raw mode is restored before returning.
-pub fn read_line(ctx: &BuiltinContext) -> String {
+pub fn read_line(ctx: &RuntimeContext) -> String {
     let trie = build_completion_trie();
 
     terminal::set_raw_mode(true).expect("failed to enable raw mode");
@@ -62,7 +62,7 @@ pub fn read_line(ctx: &BuiltinContext) -> String {
             b'\t' => {
                 tab_count += 1;
 
-                let (mut prev_words, prefix) = get_completion_context(&line);
+                let (prev_words, prefix) = get_completion_context(&line);
 
                 if prev_words.is_empty() {
                     handle_tab_executable(&trie, &mut line, &prefix, tab_count);
@@ -189,7 +189,7 @@ fn handle_tab_completion(
     last_word: String,
     prev_words: &Vec<String>,
     tab_count: u32,
-    ctx: &BuiltinContext,
+    ctx: &RuntimeContext,
 ) {
     let executable_loc = ctx.completion.borrow().get(&prev_words[0]).unwrap().clone();
 
@@ -198,7 +198,7 @@ fn handle_tab_completion(
         env::set_var("COMP_POINT", line.len().to_string());
     }
 
-    let mut arguments: Vec<String> = Vec::new();
+    let arguments: Vec<String>;
     if prev_words.len() < 2 {
         arguments = vec![
             prev_words[0].clone(),
@@ -247,7 +247,7 @@ fn handle_tab_completion(
     }
 }
 
-fn is_completion_exist(first_cmd: &str, ctx: &BuiltinContext) -> bool {
+fn is_completion_exist(first_cmd: &str, ctx: &RuntimeContext) -> bool {
     if ctx.completion.borrow().get(first_cmd).is_none() {
         return false;
     }

@@ -1,41 +1,15 @@
-use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
-use std::env;
-use std::fmt::format;
-use std::path::PathBuf;
-use std::str::FromStr;
-
+use crate::context::RuntimeContext;
+use crate::jobs::builtin_jobs;
 use crate::redirect::CmdOutput;
 use crate::utils;
+use std::collections::HashMap;
+use std::env;
+use std::path::PathBuf;
+use std::str::FromStr;
 
 // ---------------------------------------------------------------------------
 // Builtin infrastructure
 // ---------------------------------------------------------------------------
-
-/// Context passed to every builtin invocation.
-///
-/// Contains read-only information the builtin might need (e.g. the
-/// list of registered builtin names for the `type` command).
-///
-/// This struct is constructed once from a [`BuiltinRegistry`] and
-/// shared for the entire lifetime of the shell.
-#[derive(Clone)]
-pub struct BuiltinContext {
-    pub builtin_names: Vec<String>,
-    /// Mutable at runtime via interior mutability (`RefCell`).
-    /// Use `.borrow()` to read and `.borrow_mut()` to write.
-    pub completion: RefCell<HashMap<String, String>>,
-}
-
-impl BuiltinContext {
-    /// Build a context from the current state of a [`BuiltinRegistry`].
-    pub fn from_registry(registry: &BuiltinRegistry) -> Self {
-        Self {
-            builtin_names: registry.names().into_iter().map(|s| s.to_owned()).collect(),
-            completion: RefCell::new(HashMap::new()),
-        }
-    }
-}
 
 /// The result of running a builtin command.
 pub enum BuiltinResult {
@@ -46,7 +20,7 @@ pub enum BuiltinResult {
 }
 
 /// Signature for all builtin handler functions.
-pub type BuiltinFn = fn(args: &[String], ctx: &BuiltinContext) -> BuiltinResult;
+pub type BuiltinFn = fn(args: &[String], ctx: &RuntimeContext) -> BuiltinResult;
 
 /// A registry of shell builtin commands.
 ///
@@ -100,15 +74,15 @@ impl BuiltinRegistry {
 // Builtin implementations
 // ---------------------------------------------------------------------------
 
-fn builtin_exit(_args: &[String], _ctx: &BuiltinContext) -> BuiltinResult {
+fn builtin_exit(_args: &[String], _ctx: &RuntimeContext) -> BuiltinResult {
     BuiltinResult::Exit
 }
 
-fn builtin_echo(args: &[String], _ctx: &BuiltinContext) -> BuiltinResult {
+fn builtin_echo(args: &[String], _ctx: &RuntimeContext) -> BuiltinResult {
     BuiltinResult::Output(CmdOutput::out(args.join(" ")))
 }
 
-fn builtin_type(args: &[String], ctx: &BuiltinContext) -> BuiltinResult {
+fn builtin_type(args: &[String], ctx: &RuntimeContext) -> BuiltinResult {
     let name = args.join(" ");
 
     if ctx.builtin_names.iter().any(|n| n == &name) {
@@ -123,12 +97,12 @@ fn builtin_type(args: &[String], ctx: &BuiltinContext) -> BuiltinResult {
     BuiltinResult::Output(output)
 }
 
-fn builtin_pwd(_args: &[String], _ctx: &BuiltinContext) -> BuiltinResult {
+fn builtin_pwd(_args: &[String], _ctx: &RuntimeContext) -> BuiltinResult {
     let cwd = env::current_dir().unwrap().display().to_string();
     BuiltinResult::Output(CmdOutput::out(cwd))
 }
 
-fn builtin_cd(args: &[String], _ctx: &BuiltinContext) -> BuiltinResult {
+fn builtin_cd(args: &[String], _ctx: &RuntimeContext) -> BuiltinResult {
     let raw_path = args.first().map(|s| s.as_str()).unwrap_or("~");
 
     // Expand tilde *before* checking existence (fixes the old bug where a
@@ -146,7 +120,7 @@ fn builtin_cd(args: &[String], _ctx: &BuiltinContext) -> BuiltinResult {
     BuiltinResult::Output(CmdOutput::empty())
 }
 
-fn builtin_complete(args: &[String], ctx: &BuiltinContext) -> BuiltinResult {
+fn builtin_complete(args: &[String], ctx: &RuntimeContext) -> BuiltinResult {
     if args[0] == "-p" {
         // let value = ctx.completion.borrow().get().unwrap_or(&"".to_string()).clone();
         if let Some(value) = ctx.completion.borrow().get(args[1].as_str()) {
@@ -170,14 +144,10 @@ fn builtin_complete(args: &[String], ctx: &BuiltinContext) -> BuiltinResult {
     BuiltinResult::Output(CmdOutput::empty())
 }
 
-fn builtin_jobs(args: &[String], ctx: &BuiltinContext) -> BuiltinResult {
-    BuiltinResult::Output(CmdOutput::empty())
-}
-
 pub fn run_background_builtin(
     func: BuiltinFn,
     args: Vec<String>,
-    ctx: BuiltinContext,
+    ctx: RuntimeContext,
     redirects: Vec<crate::parser::Redirect>,
 ) -> CmdOutput {
     let handle = std::thread::spawn(move || {
@@ -188,5 +158,6 @@ pub fn run_background_builtin(
     let tid_str = format!("{:?}", handle.thread().id());
     let pid = tid_str.replace("ThreadId(", "").replace(")", "");
     println!("[1] {}", pid);
+    // todo insert it to the job table as well
     CmdOutput::empty()
 }
