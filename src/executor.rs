@@ -33,19 +33,25 @@ pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &RuntimeCon
         },
         (None, true) => match run_external_background(&cmd.program, &cmd.args) {
             Ok(pid) => {
-                println!("[1] {}", pid);
                 // todo wrap this on a separate func
                 let status = format!("{:<24}", "Running");
-                ctx.jobs.lock().unwrap().job.insert(
-                    // pid,
-                    1,
-                    crate::jobs::Job {
-                        status: status.as_bytes().try_into().unwrap(),
-                        command: format!("{} {}", cmd.program, cmd.args.join(" ")),
-                    },
-                );
-                // ctx.jobs.lock().unwrap().recent_job_id = pid;
-                ctx.jobs.lock().unwrap().recent_job_id = 1;
+                let command = format!("{} {}", cmd.program, cmd.args.join(" "));
+
+                let job_id = {
+                    let mut jobs = ctx.jobs.lock().unwrap(); // lock ONCE
+                    let job_id = jobs.recent_job_id + 1;
+                    jobs.job.insert(
+                        job_id,
+                        crate::jobs::Job {
+                            status: status.as_bytes().try_into().unwrap(),
+                            command,
+                        },
+                    );
+                    jobs.recent_job_id = job_id;
+                    job_id
+                }; // guard dropped here, lock released after everything's done
+
+                println!("[{}] {}", job_id, pid);
                 (CmdOutput::empty(), true)
             }
             Err(err) => {
