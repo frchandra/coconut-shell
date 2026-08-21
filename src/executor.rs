@@ -40,11 +40,12 @@ pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &RuntimeCon
                 let job_id = {
                     let mut jobs = ctx.jobs.lock().unwrap(); // lock ONCE
                     let job_id = jobs.recent_job_id + 1;
-                    jobs.job.insert(
+                    jobs.job_table.insert(
                         job_id,
                         crate::jobs::Job {
                             status: status.as_bytes().try_into().unwrap(),
                             command,
+                            pid: Some(pid),
                         },
                     );
                     jobs.recent_job_id = job_id;

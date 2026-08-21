@@ -58,9 +58,9 @@ impl BuiltinRegistry {
     }
 
     /// Check whether `name` is a registered builtin.
-    pub fn is_builtin(&self, name: &str) -> bool {
-        self.commands.contains_key(name)
-    }
+    // pub fn is_builtin(&self, name: &str) -> bool {
+    //     self.commands.contains_key(name)
+    // }
 
     /// Return a sorted list of builtin names.
     pub fn names(&self) -> Vec<&str> {
