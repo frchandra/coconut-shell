@@ -2,10 +2,10 @@ use crate::builtins::BuiltinResult;
 use crate::context::RuntimeContext;
 use crate::redirect::CmdOutput;
 use libc::{WEXITSTATUS, WIFEXITED, WNOHANG, waitpid};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 pub struct JobContext {
-    pub job_table: HashMap<u32, Job>,
+    pub job_table: BTreeMap<u32, Job>, // BTreeMap to keep the jobs sorted by ID.
     pub recent_job_id: u32,
 }
 pub struct Job {
@@ -24,15 +24,21 @@ pub fn builtin_jobs(_args: &[String], ctx: &RuntimeContext) -> BuiltinResult {
     update_jobs_status_locked(&mut job_ctx.job_table);
 
     let mut lines: Vec<String> = Vec::new();
-    let mut ids: Vec<&u32> = job_ctx.job_table.keys().collect();
-    ids.sort();
+    let ids: Vec<&u32> = job_ctx.job_table.keys().collect(); // already in order, no sort() needed thanks to BTreeMap
+
+    let highest = ids.last().copied();
+    let second_highest = if ids.len() >= 2 {
+        Some(ids[ids.len() - 2])
+    } else {
+        None
+    };
 
     for id in ids {
         let job = &job_ctx.job_table[id];
         let status = std::str::from_utf8(&job.status).unwrap_or("Unknown").trim(); // last status
-        let marker = if *id == job_ctx.recent_job_id {
+        let marker = if Some(id) == highest {
             "+"
-        } else if *id == job_ctx.recent_job_id - 1 {
+        } else if Some(id) == second_highest {
             "-"
         } else {
             " "
@@ -45,7 +51,7 @@ pub fn builtin_jobs(_args: &[String], ctx: &RuntimeContext) -> BuiltinResult {
     BuiltinResult::Output(CmdOutput::out(lines.join("\n")))
 }
 
-fn update_jobs_status_locked(job_table: &mut HashMap<u32, Job>) {
+fn update_jobs_status_locked(job_table: &mut BTreeMap<u32, Job>) {
     for job in job_table.values_mut() {
         if let Some(pid) = job.pid {
             match check_if_job_exited(pid) {
@@ -62,7 +68,7 @@ fn update_jobs_status_locked(job_table: &mut HashMap<u32, Job>) {
     }
 }
 
-pub fn clear_finished_jobs(job_table: &mut HashMap<u32, Job>) {
+pub fn clear_finished_jobs(job_table: &mut BTreeMap<u32, Job>) {
     job_table.retain(|_, job| job.pid.is_some());
 }
 
@@ -85,7 +91,7 @@ pub fn check_if_job_exited(pid: u32) -> Option<i32> {
 impl JobContext {
     pub fn new() -> Self {
         Self {
-            job_table: HashMap::new(),
+            job_table: BTreeMap::new(),
             recent_job_id: 0,
         }
     }
