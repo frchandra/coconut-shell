@@ -3,7 +3,7 @@ use std::{env, fs};
 
 use crate::builtins;
 use crate::context::RuntimeContext;
-use crate::jobs::clear_finished_jobs;
+// use crate::jobs::clear_finished_jobs;
 use crate::utils::get_path_executables_deduped;
 
 use crate::terminal;

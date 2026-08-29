@@ -23,6 +23,7 @@
 //                                without the user having to type `jobs`.
 
 use crate::context::RuntimeContext;
+use crate::jobs::clear_finished_jobs;
 use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
@@ -44,7 +45,7 @@ pub struct JobEvent {
 /// LEARNING POINT: WNOHANG means waitpid returns immediately even if no child
 /// has exited. So we poll in a loop with a short sleep instead of blocking.
 /// 100–250 ms is a good balance: low CPU overhead, near-instant notification.
-const REAPER_POLL_INTERVAL: Duration = Duration::from_millis(5);
+const REAPER_POLL_INTERVAL: Duration = Duration::from_millis(1); // this affect the test result
 
 /// Spawn the reaper thread and return the receiving end of the event channel.
 ///
@@ -137,6 +138,9 @@ fn reaper_loop(ctx: RuntimeContext, tx: mpsc::Sender<JobEvent>) {
         }; // Mutex guard drops here → lock released
 
         // Step 4: send events to the main thread
+        if events.is_empty() {
+            continue;
+        }
         for event in events {
             // TODO: tx.send(event)
             //   If send() returns Err, the receiver was dropped (shell is
@@ -146,5 +150,6 @@ fn reaper_loop(ctx: RuntimeContext, tx: mpsc::Sender<JobEvent>) {
                 break;
             }
         }
+        clear_finished_jobs(&mut job_ctx.job_table);
     }
 }

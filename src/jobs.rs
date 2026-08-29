@@ -68,6 +68,44 @@ fn update_jobs_status_locked(job_table: &mut BTreeMap<u32, Job>) {
     }
 }
 
+pub fn print_already_finished_jobs(job_table: &mut BTreeMap<u32, Job>) -> Option<String> {
+    update_jobs_status_locked(job_table);
+
+    let ids: Vec<&u32> = job_table.keys().collect();
+    let highest = ids.last().copied();
+
+    let second_highest = if ids.len() >= 2 {
+        Some(ids[ids.len() - 2])
+    } else {
+        None
+    };
+
+    let mut lines: Vec<String> = Vec::new();
+    for id in ids {
+        let job = &job_table[id];
+        if job.pid.is_some() {
+            continue; // still running, skip
+        }
+        let status = std::str::from_utf8(&job.status).unwrap_or("Unknown").trim();
+        let marker = if Some(id) == highest {
+            "+"
+        } else if Some(id) == second_highest {
+            "-"
+        } else {
+            " "
+        };
+        lines.push(format!("[{}]{} {} {}", id, marker, status, job.command));
+    }
+
+    clear_finished_jobs(job_table);
+
+    if lines.is_empty() {
+        None
+    } else {
+        Some(lines.join("\n"))
+    }
+}
+
 pub fn clear_finished_jobs(job_table: &mut BTreeMap<u32, Job>) {
     job_table.retain(|_, job| job.pid.is_some());
 }
