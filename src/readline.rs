@@ -3,6 +3,7 @@ use std::{env, fs};
 
 use crate::builtins;
 use crate::context::RuntimeContext;
+use crate::jobs::clear_finished_jobs;
 use crate::utils::get_path_executables_deduped;
 
 use crate::terminal;
@@ -10,7 +11,7 @@ use crate::tokenizer;
 use crate::trie::Trie;
 
 /// Display the shell prompt.
-fn print_prompt() {
+pub fn print_prompt() {
     print!("$ ");
     io::stdout().flush().unwrap();
 }
@@ -48,7 +49,8 @@ pub fn read_line(ctx: &RuntimeContext) -> String {
     let trie = build_completion_trie();
 
     terminal::set_raw_mode(true).expect("failed to enable raw mode");
-    print_prompt();
+
+    // print_prompt();
 
     let mut line = String::new();
     let stdin = io::stdin();
