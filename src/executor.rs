@@ -53,6 +53,7 @@ pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &RuntimeCon
                 }; // guard dropped here, lock released after everything's done
 
                 println!("[{}] {}", job_id, pid);
+                std::io::Write::flush(&mut std::io::stdout()).unwrap();
                 (CmdOutput::empty(), true)
             }
             Err(err) => {

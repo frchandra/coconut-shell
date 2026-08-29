@@ -18,7 +18,6 @@ fn main() {
 
     print_prompt();
     loop {
-        let finished = jobs::print_already_finished_jobs(&mut ctx.jobs.lock().unwrap().job_table);
         let result = readline::read_line(&ctx);
         let tokens = tokenizer::tokenize(&result);
         let pipeline = parser::parse(tokens);
@@ -29,9 +28,7 @@ fn main() {
             break;
         }
 
-        if let Some(msg) = finished {
-            println!("{}", msg);
-        }
+        jobs::print_already_finished_jobs(&mut ctx.jobs.lock().unwrap().job_table);
         print_prompt();
     }
 }

@@ -2,7 +2,10 @@ use crate::builtins::BuiltinResult;
 use crate::context::RuntimeContext;
 use crate::redirect::CmdOutput;
 use libc::{WEXITSTATUS, WIFEXITED, WNOHANG, waitpid};
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    io::{self, Write},
+};
 
 pub struct JobContext {
     pub job_table: BTreeMap<u32, Job>, // BTreeMap to keep the jobs sorted by ID.
@@ -68,7 +71,7 @@ fn update_jobs_status_locked(job_table: &mut BTreeMap<u32, Job>) {
     }
 }
 
-pub fn print_already_finished_jobs(job_table: &mut BTreeMap<u32, Job>) -> Option<String> {
+pub fn print_already_finished_jobs(job_table: &mut BTreeMap<u32, Job>) {
     update_jobs_status_locked(job_table);
 
     let ids: Vec<&u32> = job_table.keys().collect();
@@ -80,11 +83,10 @@ pub fn print_already_finished_jobs(job_table: &mut BTreeMap<u32, Job>) -> Option
         None
     };
 
-    let mut lines: Vec<String> = Vec::new();
     for id in ids {
         let job = &job_table[id];
         if job.pid.is_some() {
-            continue; // still running, skip
+            continue; // still running, skipid
         }
         let status = std::str::from_utf8(&job.status).unwrap_or("Unknown").trim();
         let marker = if Some(id) == highest {
@@ -94,16 +96,11 @@ pub fn print_already_finished_jobs(job_table: &mut BTreeMap<u32, Job>) -> Option
         } else {
             " "
         };
-        lines.push(format!("[{}]{} {} {}", id, marker, status, job.command));
+        println!("[{}]{} {} {}", id, marker, status, job.command);
+        io::stdout().flush().unwrap();
     }
 
     clear_finished_jobs(job_table);
-
-    if lines.is_empty() {
-        None
-    } else {
-        Some(lines.join("\n"))
-    }
 }
 
 pub fn clear_finished_jobs(job_table: &mut BTreeMap<u32, Job>) {

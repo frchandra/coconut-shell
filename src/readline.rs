@@ -1,4 +1,5 @@
-use std::io::{self, Read, Write};
+use std::io::{self, BufRead, Read, Write};
+use std::os::unix::io::AsRawFd;
 use std::{env, fs};
 
 use crate::builtins;
@@ -45,7 +46,23 @@ fn build_custom_trie(names: Vec<String>) -> Trie {
 /// This enters raw mode so individual key-presses can be processed,
 /// providing tab-completion via a [`Trie`] built from builtin commands
 /// and `$PATH` executables.  Raw mode is restored before returning.
+///
+/// When stdin is not a terminal (e.g. piped input from a tester),
+/// raw mode is skipped and input is read line-by-line to avoid
+/// double-echo issues caused by `tcsetattr` failing on pipes.
 pub fn read_line(ctx: &RuntimeContext) -> String {
+    let is_tty = unsafe { libc::isatty(io::stdin().as_raw_fd()) } == 1;
+
+    if !is_tty {
+        // Stdin is a pipe — skip raw mode, read a full line at once.
+        let mut line = String::new();
+        io::stdin().lock().read_line(&mut line).unwrap();
+        let line = line.trim_end().to_string();
+        // Echo the command so the tester sees it on the same line as the prompt.
+        println!("{}", line);
+        return line;
+    }
+
     let trie = build_completion_trie();
 
     terminal::set_raw_mode(true).expect("failed to enable raw mode");
