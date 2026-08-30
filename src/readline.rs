@@ -14,7 +14,7 @@ use crate::trie::Trie;
 /// Display the shell prompt.
 pub fn print_prompt() {
     print!("$ ");
-    io::stdout().flush().unwrap();
+    // io::stdout().flush().unwrap();
 }
 
 /// Build a [`Trie`] populated with builtin command names and executables
@@ -104,7 +104,7 @@ pub fn read_line(ctx: &RuntimeContext) -> String {
                 let ch = c as char;
                 line.push(ch);
                 print!("{ch}");
-                io::stdout().flush().unwrap();
+                // io::stdout().flush().unwrap();
                 tab_count = 0;
             }
             _ => {}
@@ -132,14 +132,14 @@ fn handle_tab_executable(trie: &Trie, line: &mut String, prefix: &str, tab_count
     } else if predictions.len() > 1 && tab_count >= 2 {
         // Second tab with ambiguous completions — list them all.
         predictions.sort();
-        io::stdout().flush().unwrap();
+        // io::stdout().flush().unwrap();
         print!("\n{}", predictions.join(" "));
         print!("\n$ {line}");
     } else {
         print!("\x07"); // bell
     }
 
-    io::stdout().flush().unwrap();
+    // io::stdout().flush().unwrap();
 }
 
 /// Process a `<Tab>` press: attempt autocompletion for file (and directory) names.
@@ -183,14 +183,14 @@ fn handle_tab_files(line: &mut String, prev_words: &[String], prefix: &str, tab_
     } else if predictions.len() > 1 && tab_count >= 2 {
         // Second tab with ambiguous completions — list them all.
         predictions.sort();
-        io::stdout().flush().unwrap();
+        // io::stdout().flush().unwrap();
         print!("\n{}", predictions.join(" "));
         print!("\n$ {line}");
     } else {
         print!("\x07"); // bell
     }
 
-    io::stdout().flush().unwrap();
+    // io::stdout().flush().unwrap();
 }
 
 /// Process a backspace / delete-backward press.
@@ -200,7 +200,7 @@ fn handle_backspace(line: &mut String) {
     } else {
         print!("\x07"); // bell
     }
-    io::stdout().flush().unwrap();
+    // io::stdout().flush().unwrap();
 }
 
 fn handle_tab_completion(
@@ -242,27 +242,27 @@ fn handle_tab_completion(
 
     if output_data.is_empty() {
         print!("\x07"); // bell
-        io::stdout().flush().unwrap();
+        // io::stdout().flush().unwrap();
     } else if output_data.len() > 1 && tab_count < 2 {
         let trie = build_custom_trie(output_data);
         let completion = trie.longest_common_extension(last_word.as_str());
         if completion.is_some() {
             line.push_str(&completion.clone().unwrap());
             print!("{}", &completion.unwrap());
-            io::stdout().flush().unwrap();
+            // io::stdout().flush().unwrap();
         } else {
             print!("\x07"); // bell
-            io::stdout().flush().unwrap();
+            // io::stdout().flush().unwrap();
         }
     } else if output_data.len() > 1 && tab_count >= 2 {
         println!("\n{}\n$ {}", output_data.join(" ").to_string(), line);
-        io::stdout().flush().unwrap();
+        // io::stdout().flush().unwrap();
     } else {
         let completion = output_data[0]
             .strip_prefix(last_word.as_str())
             .unwrap_or(output_data[0].as_str());
         print!("{completion} ");
-        io::stdout().flush().unwrap();
+        // io::stdout().flush().unwrap();
     }
 }
 
