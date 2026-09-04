@@ -97,7 +97,7 @@ pub fn print_already_finished_jobs(job_table: &mut BTreeMap<u32, Job>) {
             " "
         };
         println!("[{}]{} {} {}", id, marker, status, job.command);
-        io::stdout().flush().unwrap();
+        // io::stdout().flush().unwrap();
     }
 
     clear_finished_jobs(job_table);

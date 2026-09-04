@@ -56,7 +56,7 @@ pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &RuntimeCon
                 }; // guard dropped here, lock released after everything's done
 
                 println!("[{}] {}", job_id, pid);
-                io::stdout().flush().unwrap();
+                // io::stdout().flush().unwrap();
                 (CmdOutput::empty(), true)
             }
             Err(err) => {
