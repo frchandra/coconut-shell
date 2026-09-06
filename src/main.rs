@@ -1,5 +1,3 @@
-use crate::readline::print_prompt;
-
 mod builtins;
 mod context;
 mod executor;

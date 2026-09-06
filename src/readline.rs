@@ -1,9 +1,8 @@
-use std::io::{self, BufRead, Read, Write};
-use std::os::unix::io::AsRawFd;
+use std::io::{self, Read, Write};
 use std::{env, fs};
 
+use crate::builtins;
 use crate::context::RuntimeContext;
-use crate::{builtins, jobs};
 // use crate::jobs::clear_finished_jobs;
 use crate::utils::get_path_executables_deduped;
 

@@ -23,28 +23,7 @@ pub fn builtin_jobs(_args: &[String], ctx: &RuntimeContext) -> BuiltinResult {
 
     update_jobs_status_locked(&mut job_ctx.job_table);
 
-    let mut lines: Vec<String> = Vec::new();
-    let ids: Vec<&u32> = job_ctx.job_table.keys().collect(); // already in order, no sort() needed thanks to BTreeMap
-
-    let highest = ids.last().copied();
-    let second_highest = if ids.len() >= 2 {
-        Some(ids[ids.len() - 2])
-    } else {
-        None
-    };
-
-    for id in ids {
-        let job = &job_ctx.job_table[id];
-        let status = std::str::from_utf8(&job.status).unwrap_or("Unknown").trim(); // last status
-        let marker = if Some(id) == highest {
-            "+"
-        } else if Some(id) == second_highest {
-            "-"
-        } else {
-            " "
-        };
-        lines.push(format!("[{}]{} {} {}", id, marker, status, job.command));
-    }
+    let lines = format_jobs(&job_ctx.job_table, false);
 
     clear_finished_jobs(&mut job_ctx.job_table);
 
@@ -68,22 +47,20 @@ fn update_jobs_status_locked(job_table: &mut BTreeMap<u32, Job>) {
     }
 }
 
-pub fn print_already_finished_jobs(job_table: &mut BTreeMap<u32, Job>) {
-    update_jobs_status_locked(job_table);
-
+fn format_jobs(job_table: &BTreeMap<u32, Job>, finished_only: bool) -> Vec<String> {
     let ids: Vec<&u32> = job_table.keys().collect();
     let highest = ids.last().copied();
-
     let second_highest = if ids.len() >= 2 {
         Some(ids[ids.len() - 2])
     } else {
         None
     };
 
+    let mut lines = Vec::new();
     for id in ids {
         let job = &job_table[id];
-        if job.pid.is_some() {
-            continue; // still running, skipid
+        if finished_only && job.pid.is_some() {
+            continue;
         }
         let status = std::str::from_utf8(&job.status).unwrap_or("Unknown").trim();
         let marker = if Some(id) == highest {
@@ -93,7 +70,16 @@ pub fn print_already_finished_jobs(job_table: &mut BTreeMap<u32, Job>) {
         } else {
             " "
         };
-        println!("[{}]{} {} {}", id, marker, status, job.command);
+        lines.push(format!("[{}]{} {} {}", id, marker, status, job.command));
+    }
+    lines
+}
+
+pub fn print_already_finished_jobs(job_table: &mut BTreeMap<u32, Job>) {
+    update_jobs_status_locked(job_table);
+
+    for line in format_jobs(job_table, true) {
+        println!("{}", line);
     }
 
     clear_finished_jobs(job_table);
