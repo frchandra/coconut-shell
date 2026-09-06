@@ -2,8 +2,8 @@ use std::io::{self, BufRead, Read, Write};
 use std::os::unix::io::AsRawFd;
 use std::{env, fs};
 
-use crate::builtins;
 use crate::context::RuntimeContext;
+use crate::{builtins, jobs};
 // use crate::jobs::clear_finished_jobs;
 use crate::utils::get_path_executables_deduped;
 
@@ -51,23 +51,13 @@ fn build_custom_trie(names: Vec<String>) -> Trie {
 /// raw mode is skipped and input is read line-by-line to avoid
 /// double-echo issues caused by `tcsetattr` failing on pipes.
 pub fn read_line(ctx: &RuntimeContext) -> String {
-    let is_tty = unsafe { libc::isatty(io::stdin().as_raw_fd()) } == 1;
-
-    if !is_tty {
-        // Stdin is a pipe — skip raw mode, read a full line at once.
-        let mut line = String::new();
-        io::stdin().lock().read_line(&mut line).unwrap();
-        let line = line.trim_end().to_string();
-        // Echo the command so the tester sees it on the same line as the prompt.
-        println!("{}", line);
-        return line;
-    }
+    // jobs::print_already_finished_jobs(&mut ctx.jobs.lock().unwrap().job_table);
 
     let trie = build_completion_trie();
 
     terminal::set_raw_mode(true).expect("failed to enable raw mode");
 
-    // print_prompt();
+    print_prompt();
 
     let mut line = String::new();
     let stdin = io::stdin();

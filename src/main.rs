@@ -16,7 +16,7 @@ fn main() {
     let registry = builtins::BuiltinRegistry::new();
     let ctx = context::RuntimeContext::new(&registry);
 
-    print_prompt();
+    // print_prompt();
     loop {
         let result = readline::read_line(&ctx);
         let tokens = tokenizer::tokenize(&result);
@@ -27,8 +27,9 @@ fn main() {
         if !executor::execute(&pipeline, &registry, &ctx) {
             break;
         }
-
+        // unsafe { sleep(2) }; // Sleep for 1 second to avoid busy waiting
         jobs::print_already_finished_jobs(&mut ctx.jobs.lock().unwrap().job_table);
-        print_prompt();
+
+        // print_prompt();
     }
 }
