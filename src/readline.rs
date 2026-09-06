@@ -104,7 +104,7 @@ pub fn read_line(ctx: &RuntimeContext) -> String {
                 let ch = c as char;
                 line.push(ch);
                 print!("{ch}");
-                // io::stdout().flush().unwrap();
+                io::stdout().flush().unwrap();
                 tab_count = 0;
             }
             _ => {}
@@ -132,7 +132,6 @@ fn handle_tab_executable(trie: &Trie, line: &mut String, prefix: &str, tab_count
     } else if predictions.len() > 1 && tab_count >= 2 {
         // Second tab with ambiguous completions — list them all.
         predictions.sort();
-        // io::stdout().flush().unwrap();
         print!("\n{}", predictions.join(" "));
         print!("\n$ {line}");
     } else {
@@ -183,7 +182,6 @@ fn handle_tab_files(line: &mut String, prev_words: &[String], prefix: &str, tab_
     } else if predictions.len() > 1 && tab_count >= 2 {
         // Second tab with ambiguous completions — list them all.
         predictions.sort();
-        io::stdout().flush().unwrap();
         print!("\n{}", predictions.join(" "));
         print!("\n$ {line}");
     } else {
@@ -256,7 +254,6 @@ fn handle_tab_completion(
         }
     } else if output_data.len() > 1 && tab_count >= 2 {
         println!("\n{}\n$ {}", output_data.join(" ").to_string(), line);
-        io::stdout().flush().unwrap();
     } else {
         let completion = output_data[0]
             .strip_prefix(last_word.as_str())

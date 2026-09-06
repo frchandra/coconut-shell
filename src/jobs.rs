@@ -2,10 +2,7 @@ use crate::builtins::BuiltinResult;
 use crate::context::RuntimeContext;
 use crate::redirect::CmdOutput;
 use libc::{WEXITSTATUS, WIFEXITED, WNOHANG, waitpid};
-use std::{
-    collections::BTreeMap,
-    io::{self, Write},
-};
+use std::collections::BTreeMap;
 
 pub struct JobContext {
     pub job_table: BTreeMap<u32, Job>, // BTreeMap to keep the jobs sorted by ID.
@@ -97,7 +94,6 @@ pub fn print_already_finished_jobs(job_table: &mut BTreeMap<u32, Job>) {
             " "
         };
         println!("[{}]{} {} {}", id, marker, status, job.command);
-        // io::stdout().flush().unwrap();
     }
 
     clear_finished_jobs(job_table);
