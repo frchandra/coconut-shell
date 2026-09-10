@@ -112,4 +112,35 @@ impl JobContext {
             recent_job_id: 0,
         }
     }
+
+    /// Finds the smallest unused job ID starting from 1 (reuses cleared IDs).
+    pub fn get_next_job_id(&self) -> u32 {
+        let mut candidate = 1;
+        for &id in self.job_table.keys() {
+            if id == candidate {
+                candidate += 1;
+            } else if id > candidate {
+                break;
+            }
+        }
+        candidate
+    }
+
+    /// Adds a new job using the next available job ID.
+    pub fn add_job(&mut self, command: String, pid: u32) -> u32 {
+        let job_id = self.get_next_job_id();
+        let status = format!("{:<24}", "Running");
+
+        self.job_table.insert(
+            job_id,
+            Job {
+                status: status.as_bytes().try_into().unwrap(),
+                command,
+                pid: Some(pid),
+            },
+        );
+
+        self.recent_job_id = job_id;
+        job_id
+    }
 }
