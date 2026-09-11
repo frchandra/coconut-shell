@@ -1,6 +1,8 @@
+use std::process::{Command, Stdio};
+
 use crate::builtins::{BuiltinRegistry, BuiltinResult};
 use crate::context::RuntimeContext;
-use crate::parser::Pipeline;
+use crate::parser::{Pipeline, SimpleCommand};
 use crate::redirect::{CmdOutput, apply_redirects};
 use crate::utils;
 
@@ -17,6 +19,12 @@ pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &RuntimeCon
         Some(c) => c,
         None => return true,
     };
+
+    // temporary refactorable flow
+    let second_cmd = pipeline.commands.get(1);
+    if second_cmd.is_some() {
+        return execute_with_pipe(cmd, second_cmd.unwrap(), registry, ctx);
+    }
 
     // Try builtin first, then fall back to external.
     let (output, should_continue) = match (registry.get(&cmd.program), cmd.is_background) {
@@ -52,6 +60,40 @@ pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &RuntimeCon
     };
     apply_redirects(&output, &cmd.redirects);
     should_continue
+}
+
+// just a temporary refacotable function
+pub fn execute_with_pipe(
+    cmd: &SimpleCommand,
+    second_cmd: &SimpleCommand,
+    registry: &BuiltinRegistry,
+    ctx: &RuntimeContext,
+) -> bool {
+    // lets assume that there is no built in commands for now.
+    // lets assume that there is no background commands for now.
+
+    let mut first_proc = Command::new(&cmd.program)
+        .args(&cmd.args)
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("Failed to execute command");
+
+    // let mut first_proc = first_proc; // need `mut` to call .wait()
+    let first_proc_stdout = first_proc.stdout.take().expect("Failed to get stdout");
+
+    let second_proc = Command::new(&second_cmd.program)
+        .args(&second_cmd.args)
+        .stdin(Stdio::from(first_proc_stdout))
+        .spawn()
+        .expect("Failed to execute command");
+
+    let output = second_proc.wait_with_output().unwrap();
+    print!("{}", String::from_utf8_lossy(&output.stdout).trim());
+
+    // don't forget this:
+    first_proc.wait().expect("failed to wait on first_proc");
+
+    true
 }
 
 /// Spawn an external process and capture its output.

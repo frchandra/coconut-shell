@@ -8,6 +8,20 @@ pub struct Redirect {
     pub target: String,
 }
 
+impl std::fmt::Display for Redirect {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let op = match self.mode {
+            RedirectMode::Truncate => ">",
+            RedirectMode::Append => ">>",
+        };
+        if self.fd == 1 {
+            write!(f, "{} {}", op, self.target)
+        } else {
+            write!(f, "{}{} {}", self.fd, op, self.target)
+        }
+    }
+}
+
 /// A simple command: a program name, arguments, and zero or more redirections.
 #[derive(Debug, Clone)]
 pub struct SimpleCommand {
@@ -15,6 +29,27 @@ pub struct SimpleCommand {
     pub args: Vec<String>,
     pub redirects: Vec<Redirect>,
     pub is_background: bool,
+}
+
+impl SimpleCommand {
+    pub fn to_string(&self) -> String {
+        let mut parts = Vec::new();
+        parts.push(self.program.clone());
+        parts.extend(self.args.clone());
+        for redirect in &self.redirects {
+            parts.push(redirect.to_string());
+        }
+        if self.is_background {
+            parts.push("&".to_string());
+        }
+        parts.join(" ")
+    }
+}
+
+impl std::fmt::Display for SimpleCommand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_string())
+    }
 }
 
 /// A pipeline of one or more [`SimpleCommand`]s connected by pipes.
@@ -29,6 +64,20 @@ pub struct Pipeline {
 impl Pipeline {
     pub fn is_empty(&self) -> bool {
         self.commands.is_empty()
+    }
+
+    pub fn to_string(&self) -> String {
+        self.commands
+            .iter()
+            .map(|cmd| cmd.to_string())
+            .collect::<Vec<_>>()
+            .join(" | ")
+    }
+}
+
+impl std::fmt::Display for Pipeline {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_string())
     }
 }
 
