@@ -24,14 +24,14 @@ impl std::fmt::Display for Redirect {
 
 /// A simple command: a program name, arguments, and zero or more redirections.
 #[derive(Debug, Clone)]
-pub struct SimpleCommand {
+pub struct UnitCommand {
     pub program: String,
     pub args: Vec<String>,
     pub redirects: Vec<Redirect>,
     pub is_background: bool,
 }
 
-impl SimpleCommand {
+impl UnitCommand {
     pub fn to_string(&self) -> String {
         let mut parts = Vec::new();
         parts.push(self.program.clone());
@@ -46,19 +46,19 @@ impl SimpleCommand {
     }
 }
 
-impl std::fmt::Display for SimpleCommand {
+impl std::fmt::Display for UnitCommand {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.to_string())
     }
 }
 
-/// A pipeline of one or more [`SimpleCommand`]s connected by pipes.
+/// A pipeline of one or more [`UnitCommand`]s connected by pipes.
 ///
 /// Currently only single-command pipelines are executed, but the
 /// structure is ready for multi-command pipes in the future.
 #[derive(Debug)]
 pub struct Pipeline {
-    pub commands: Vec<SimpleCommand>,
+    pub commands: Vec<UnitCommand>,
 }
 
 impl Pipeline {
@@ -88,7 +88,7 @@ impl std::fmt::Display for Pipeline {
 /// as a filename. `Pipe` tokens finalize the current command and start
 /// a new one.
 pub fn parse(tokens: Vec<Token>) -> Pipeline {
-    let mut commands: Vec<SimpleCommand> = Vec::new();
+    let mut commands: Vec<UnitCommand> = Vec::new();
     let mut program: Option<String> = None;
     let mut args: Vec<String> = Vec::new();
     let mut redirects: Vec<Redirect> = Vec::new();
@@ -117,7 +117,7 @@ pub fn parse(tokens: Vec<Token>) -> Pipeline {
             Token::Pipe => {
                 // Finalize current command and start a fresh one.
                 if let Some(prog) = program.take() {
-                    commands.push(SimpleCommand {
+                    commands.push(UnitCommand {
                         program: prog,
                         args: std::mem::take(&mut args),
                         redirects: std::mem::take(&mut redirects),
@@ -130,7 +130,7 @@ pub fn parse(tokens: Vec<Token>) -> Pipeline {
             Token::Ampersand => {
                 // Run current command in the background and start a fresh one.
                 if let Some(prog) = program.take() {
-                    commands.push(SimpleCommand {
+                    commands.push(UnitCommand {
                         program: prog, // implicit std::mem::take had already handled by Option<>
                         args: std::mem::take(&mut args), // we use std::mem::take because we push an outside loop variable multiple times, so we need to 'clear' it after each push
                         redirects: std::mem::take(&mut redirects),
@@ -143,7 +143,7 @@ pub fn parse(tokens: Vec<Token>) -> Pipeline {
 
     // Push the last (or only) command.
     if let Some(prog) = program {
-        commands.push(SimpleCommand {
+        commands.push(UnitCommand {
             program: prog,
             args,
             redirects,

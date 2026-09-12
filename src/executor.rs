@@ -1,149 +1,209 @@
+use std::fs::File;
+use std::os::unix::io::FromRawFd;
 use std::process::{Command, Stdio};
 
-use crate::builtins::{BuiltinRegistry, BuiltinResult};
+use crate::builtins::{BuiltinFn, BuiltinRegistry, BuiltinResult};
 use crate::context::RuntimeContext;
-use crate::parser::{Pipeline, SimpleCommand};
-use crate::redirect::{CmdOutput, apply_redirects};
+use crate::parser::{Pipeline, UnitCommand};
+use crate::redirect::apply_redirects;
 use crate::utils;
+
+enum ResolvedCommand {
+    Builtin(BuiltinFn),
+    External(std::ffi::OsString),
+}
+
+fn resolve(program: &str, registry: &BuiltinRegistry) -> Option<ResolvedCommand> {
+    if let Some(func) = registry.get(program) {
+        Some(ResolvedCommand::Builtin(func))
+    } else if let Some(path) = utils::find_executable_in_path(program) {
+        Some(ResolvedCommand::External(path.file_name().unwrap().to_os_string()))
+    } else {
+        None
+    }
+}
+
+enum SpawnedProcess {
+    Child(std::process::Child),
+    Thread(Option<std::thread::JoinHandle<()>>),
+}
+
+impl SpawnedProcess {
+    fn wait(&mut self) {
+        match self {
+            SpawnedProcess::Child(c) => {
+                let _ = c.wait();
+            }
+            SpawnedProcess::Thread(opt) => {
+                if let Some(t) = opt.take() {
+                    let _ = t.join();
+                }
+            }
+        }
+    }
+}
+
+fn get_cmd_stdio(
+    cmd: &UnitCommand,
+    default_pipe_write: Option<File>,
+) -> (Option<File>, Option<File>) {
+    let mut out = default_pipe_write;
+    let mut err = None;
+    for redir in &cmd.redirects {
+        let file = match redir.mode {
+            crate::tokenizer::RedirectMode::Truncate => std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .open(&redir.target),
+            crate::tokenizer::RedirectMode::Append => std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .append(true)
+                .open(&redir.target),
+        };
+        if let Ok(f) = file {
+            if redir.fd == 1 {
+                out = Some(f);
+            } else if redir.fd == 2 {
+                err = Some(f);
+            }
+        }
+    }
+    (out, err)
+}
 
 /// Run a [`Pipeline`].
 ///
-/// Currently only single-command pipelines are supported. When pipeline
-/// support is added, this function will wire up `pipe()` between
-/// successive [`SimpleCommand`]s.
-///
 /// Returns `true` if the shell should continue, `false` to exit.
 pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &RuntimeContext) -> bool {
-    // For now, handle only the first command. because pipeline || has not been implemented yet.
-    let cmd = match pipeline.commands.first() {
-        Some(c) => c,
-        None => return true,
-    };
-
-    // temporary refactorable flow
-    let second_cmd = pipeline.commands.get(1);
-    if second_cmd.is_some() {
-        return execute_with_pipe(cmd, second_cmd.unwrap(), registry, ctx);
+    let commands = &pipeline.commands;
+    if commands.is_empty() {
+        return true;
     }
 
-    // Try builtin first, then fall back to external.
-    let (output, should_continue) = match (registry.get(&cmd.program), cmd.is_background) {
-        (Some(func), true) => {
-            let args = cmd.args.clone();
-            let cloned_ctx = ctx.clone();
-            let redirects = cmd.redirects.clone();
-            let out = crate::builtins::run_background_builtin(func, args, cloned_ctx, redirects);
-            (out, true)
+    let is_background = commands.last().unwrap().is_background;
+    let n = commands.len();
+
+    // ── Step 1: Resolve all commands ──
+    let resolved: Vec<Option<ResolvedCommand>> = commands
+        .iter()
+        .map(|cmd| resolve(&cmd.program, registry))
+        .collect();
+
+    // ── Step 2: Special case — single foreground builtin ──
+    if n == 1 && !is_background {
+        if let Some(ResolvedCommand::Builtin(func)) = &resolved[0] {
+            match func(&commands[0].args, ctx) {
+                BuiltinResult::Exit => return false,
+                BuiltinResult::Output(out) => {
+                    apply_redirects(&out, &commands[0].redirects);
+                    return true;
+                }
+            }
         }
-        (Some(func), false) => match func(&cmd.args, ctx) {
-            BuiltinResult::Exit => return false,
-            BuiltinResult::Output(out) => (out, true),
-        },
-        (None, true) => match run_external_background(&cmd.program, &cmd.args) {
-            Ok(pid) => {
-                let command = format!("{} {}", cmd.program, cmd.args.join(" "));
+    }
 
-                let job_id = {
-                    let mut jobs = ctx.jobs.lock().unwrap(); // lock ONCE
-                    jobs.add_job(command, pid)
-                }; // guard dropped here, lock released after everything's done
+    // ── Step 3 & 4: Plumb pipes and spawn ──
+    let mut prev_read_fd: Option<File> = None;
+    let mut spawned: Vec<SpawnedProcess> = Vec::new();
 
-                println!("[{}] {}", job_id, pid);
-                (CmdOutput::empty(), true)
+    for i in 0..n {
+        let cmd = &commands[i];
+        let is_last = i == n - 1;
+
+        let mut read_fd = None;
+        let mut write_fd = None;
+
+        if !is_last {
+            let mut fds = [0i32; 2];
+            unsafe {
+                libc::pipe(fds.as_mut_ptr());
             }
-            Err(err) => {
-                eprintln!("{}", err);
-                (CmdOutput::err(err), true)
+            read_fd = Some(unsafe { File::from_raw_fd(fds[0]) });
+            write_fd = Some(unsafe { File::from_raw_fd(fds[1]) });
+        }
+
+        let (stdout_file, stderr_file) = get_cmd_stdio(cmd, write_fd);
+        let stdin_file = prev_read_fd.take();
+
+        match &resolved[i] {
+            Some(ResolvedCommand::External(path)) => {
+                let stdin = stdin_file.map(Stdio::from).unwrap_or_else(Stdio::inherit);
+                let stdout = stdout_file.map(Stdio::from).unwrap_or_else(Stdio::inherit);
+                let stderr = stderr_file.map(Stdio::from).unwrap_or_else(Stdio::inherit);
+
+                let child = Command::new(path)
+                    .args(&cmd.args)
+                    .stdin(stdin)
+                    .stdout(stdout)
+                    .stderr(stderr)
+                    .spawn();
+
+                match child {
+                    Ok(c) => spawned.push(SpawnedProcess::Child(c)),
+                    Err(e) => eprintln!("{}: {}", cmd.program, e),
+                }
             }
-        },
-        (None, false) => (run_external(&cmd.program, &cmd.args), true),
-    };
-    apply_redirects(&output, &cmd.redirects);
-    should_continue
-}
+            Some(ResolvedCommand::Builtin(func)) => {
+                let func = *func;
+                let args = cmd.args.clone();
+                let ctx = ctx.clone();
+                let mut out_file = stdout_file;
+                let mut err_file = stderr_file;
 
-// just a temporary refacotable function
-pub fn execute_with_pipe(
-    cmd: &SimpleCommand,
-    second_cmd: &SimpleCommand,
-    registry: &BuiltinRegistry,
-    ctx: &RuntimeContext,
-) -> bool {
-    // lets assume that there is no built in commands for now.
-    // lets assume that there is no background commands for now.
+                let handle = std::thread::spawn(move || {
+                    if let BuiltinResult::Output(out) = func(&args, &ctx) {
+                        if let Some(text) = out.stdout {
+                            if let Some(f) = out_file.as_mut() {
+                                use std::io::Write;
+                                let _ = f.write_all(text.as_bytes());
+                            } else {
+                                println!("{}", text);
+                            }
+                        }
+                        if let Some(text) = out.stderr {
+                            if let Some(f) = err_file.as_mut() {
+                                use std::io::Write;
+                                let _ = f.write_all(text.as_bytes());
+                            } else {
+                                eprintln!("{}", text);
+                            }
+                        }
+                    }
+                });
+                spawned.push(SpawnedProcess::Thread(Some(handle)));
+            }
+            None => {
+                eprintln!("{}: command not found", cmd.program);
+            }
+        }
 
-    let mut first_proc = Command::new(&cmd.program)
-        .args(&cmd.args)
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("Failed to execute command");
+        prev_read_fd = read_fd;
+    }
 
-    // let mut first_proc = first_proc; // need `mut` to call .wait()
-    let first_proc_stdout = first_proc.stdout.take().expect("Failed to get stdout");
+    // ── Step 5: Wait or Background ──
+    if is_background {
+        let mut last_pid = None;
+        for p in &spawned {
+            if let SpawnedProcess::Child(c) = p {
+                last_pid = Some(c.id());
+            }
+        }
 
-    let second_proc = Command::new(&second_cmd.program)
-        .args(&second_cmd.args)
-        .stdin(Stdio::from(first_proc_stdout))
-        .spawn()
-        .expect("Failed to execute command");
+        let pid = last_pid.unwrap_or(0);
+        let command = pipeline.to_string();
 
-    let output = second_proc.wait_with_output().unwrap();
-    print!("{}", String::from_utf8_lossy(&output.stdout).trim());
-
-    // don't forget this:
-    first_proc.wait().expect("failed to wait on first_proc");
+        let job_id = {
+            let mut jobs = ctx.jobs.lock().unwrap();
+            jobs.add_job(command, pid)
+        };
+        println!("[{}] {}", job_id, pid);
+    } else {
+        for mut proc in spawned {
+            proc.wait();
+        }
+    }
 
     true
-}
-
-/// Spawn an external process and capture its output.
-fn run_external(command: &str, args: &[String]) -> CmdOutput {
-    let path = match utils::find_executable_in_path(command) {
-        Some(p) => p,
-        None => {
-            return CmdOutput::err(format!("{command}: command not found"));
-        }
-    };
-
-    let output = std::process::Command::new(path.file_name().unwrap())
-        .args(args)
-        .output()
-        .expect("Failed to execute command");
-
-    CmdOutput {
-        stdout: if output.stdout.is_empty() {
-            None
-        } else {
-            Some(
-                String::from_utf8_lossy(&output.stdout)
-                    .trim_end()
-                    .to_string(),
-            )
-        },
-        stderr: if output.stderr.is_empty() {
-            None
-        } else {
-            Some(
-                String::from_utf8_lossy(&output.stderr)
-                    .trim_end()
-                    .to_string(),
-            )
-        },
-    }
-}
-
-fn run_external_background(command: &str, args: &[String]) -> Result<u32, String> {
-    let path = match utils::find_executable_in_path(command) {
-        Some(p) => p,
-        None => {
-            return Err(format!("{command}: command not found"));
-        }
-    };
-
-    let child = std::process::Command::new(path.file_name().unwrap())
-        .args(args)
-        .spawn()
-        .map_err(|e| format!("{command}: failed to start ({e})"))?;
-
-    Ok(child.id())
 }
