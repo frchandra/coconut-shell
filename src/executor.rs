@@ -204,7 +204,10 @@ pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &RuntimeCon
         }
 
         let pid = last_pid.unwrap_or(0);
-        let command = pipeline.to_string();
+        let mut command = pipeline.to_string();
+        if let Some(stripped) = command.strip_suffix('&') {
+            command = stripped.trim_end().to_string();
+        }
 
         let job_id = {
             let mut jobs = ctx.jobs.lock().unwrap();
