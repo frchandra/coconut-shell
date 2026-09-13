@@ -123,6 +123,8 @@ pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &RuntimeCon
             let mut fds = [0i32; 2];
             unsafe {
                 libc::pipe(fds.as_mut_ptr());
+                libc::fcntl(fds[0], libc::F_SETFD, libc::FD_CLOEXEC);
+                libc::fcntl(fds[1], libc::F_SETFD, libc::FD_CLOEXEC);
             }
             read_fd = Some(unsafe { File::from_raw_fd(fds[0]) });
             write_fd = Some(unsafe { File::from_raw_fd(fds[1]) });
