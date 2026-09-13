@@ -1,5 +1,6 @@
 use crate::parser::Redirect;
 use crate::tokenizer::RedirectMode;
+use std::io::Write;
 
 /// The output of any command (builtin or external).
 ///
@@ -42,7 +43,6 @@ impl CmdOutput {
 pub fn apply_redirects(output: &CmdOutput, redirects: &[Redirect]) {
     let mut stdout_redirected = false;
     let mut stderr_redirected = false;
-
     for redir in redirects {
         let content = match redir.fd {
             1 => {
@@ -55,34 +55,26 @@ pub fn apply_redirects(output: &CmdOutput, redirects: &[Redirect]) {
             }
             _ => continue,
         };
-
-        match redir.mode {
-            RedirectMode::Truncate => {
-                std::fs::write(&redir.target, content.as_bytes()).unwrap();
-            }
-            RedirectMode::Append => {
-                use std::fs::OpenOptions;
-                use std::io::Write;
-
-                let mut file = OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&redir.target)
-                    .unwrap();
-                if file.metadata().unwrap().len() > 0 {
-                    write!(file, "\n{}", content).unwrap(); // Add a newline before appending if the file isn't empty.
-                } else {
-                    write!(file, "{}", content).unwrap();
-                }
+        let mut file = match redir.mode {
+            RedirectMode::Truncate => std::fs::File::create(&redir.target).unwrap(),
+            RedirectMode::Append => std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&redir.target)
+                .unwrap(),
+        };
+        if !content.is_empty() {
+            if content.ends_with('\n') {
+                write!(file, "{}", content).unwrap();
+            } else {
+                writeln!(file, "{}", content).unwrap();
             }
         }
     }
-
     // Print anything that wasn't redirected.
     if !stdout_redirected && let Some(ref s) = output.stdout {
         println!("{}", s);
     }
-
     if !stderr_redirected && let Some(ref e) = output.stderr {
         eprintln!("{}", e);
     }

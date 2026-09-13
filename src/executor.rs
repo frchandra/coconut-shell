@@ -1,4 +1,6 @@
 use std::fs::File;
+use std::io;
+use std::io::Write;
 use std::os::unix::io::FromRawFd;
 use std::process::{Command, Stdio};
 
@@ -17,7 +19,9 @@ fn resolve(program: &str, registry: &BuiltinRegistry) -> Option<ResolvedCommand>
     if let Some(func) = registry.get(program) {
         Some(ResolvedCommand::Builtin(func))
     } else if let Some(path) = utils::find_executable_in_path(program) {
-        Some(ResolvedCommand::External(path.file_name().unwrap().to_os_string()))
+        Some(ResolvedCommand::External(
+            path.file_name().unwrap().to_os_string(),
+        ))
     } else {
         None
     }
@@ -157,7 +161,11 @@ pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &RuntimeCon
                         if let Some(text) = out.stdout {
                             if let Some(f) = out_file.as_mut() {
                                 use std::io::Write;
-                                let _ = f.write_all(text.as_bytes());
+                                writeln!(f, "{}", text).unwrap();
+                                // let _ = f.write_all(text.as_bytes());
+                                // if !text.ends_with('\n') {
+                                // let _ = f.write_all(b"\n");
+                                // }
                             } else {
                                 println!("{}", text);
                             }
@@ -165,7 +173,11 @@ pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &RuntimeCon
                         if let Some(text) = out.stderr {
                             if let Some(f) = err_file.as_mut() {
                                 use std::io::Write;
-                                let _ = f.write_all(text.as_bytes());
+                                writeln!(f, "{}", text).unwrap();
+                                // let _ = f.write_all(text.as_bytes());
+                                // if !text.ends_with('\n') {
+                                // let _ = f.write_all(b"\n");
+                                // }
                             } else {
                                 eprintln!("{}", text);
                             }
