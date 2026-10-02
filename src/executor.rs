@@ -1,6 +1,4 @@
 use std::fs::File;
-use std::io;
-use std::io::Write;
 use std::os::unix::io::FromRawFd;
 use std::process::{Command, Stdio};
 
@@ -164,10 +162,6 @@ pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &RuntimeCon
                             if let Some(f) = out_file.as_mut() {
                                 use std::io::Write;
                                 writeln!(f, "{}", text).unwrap();
-                                // let _ = f.write_all(text.as_bytes());
-                                // if !text.ends_with('\n') {
-                                // let _ = f.write_all(b"\n");
-                                // }
                             } else {
                                 println!("{}", text);
                             }
@@ -176,10 +170,6 @@ pub fn execute(pipeline: &Pipeline, registry: &BuiltinRegistry, ctx: &RuntimeCon
                             if let Some(f) = err_file.as_mut() {
                                 use std::io::Write;
                                 writeln!(f, "{}", text).unwrap();
-                                // let _ = f.write_all(text.as_bytes());
-                                // if !text.ends_with('\n') {
-                                // let _ = f.write_all(b"\n");
-                                // }
                             } else {
                                 eprintln!("{}", text);
                             }
