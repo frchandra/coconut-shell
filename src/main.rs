@@ -1,6 +1,9 @@
+use crate::history::append_history;
+
 mod builtins;
 mod context;
 mod executor;
+mod history;
 mod jobs;
 mod parser;
 mod readline;
@@ -17,6 +20,7 @@ fn main() {
     // print_prompt();
     loop {
         let result = readline::read_line(&ctx);
+        append_history(&result, &ctx);
         let tokens = tokenizer::tokenize(&result);
         let pipeline = parser::parse(tokens);
         if pipeline.is_empty() {

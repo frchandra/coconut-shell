@@ -18,6 +18,7 @@ pub struct RuntimeContext {
     /// Job table shared between the executor and the `jobs` builtin.
     /// Uses `Arc<Mutex<>>` so it can be safely sent to background threads.
     pub jobs: Arc<Mutex<JobContext>>,
+    pub history: RefCell<Vec<String>>,
 }
 
 impl RuntimeContext {
@@ -29,6 +30,7 @@ impl RuntimeContext {
             builtin_names: registry.names().into_iter().map(|s| s.to_owned()).collect(),
             completion: RefCell::new(HashMap::new()),
             jobs: Arc::new(Mutex::new(JobContext::new())),
+            history: RefCell::new(Vec::new()),
         }
     }
 }

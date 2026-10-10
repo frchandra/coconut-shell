@@ -1,4 +1,5 @@
 use crate::context::RuntimeContext;
+use crate::history::builtin_history;
 use crate::jobs::builtin_jobs;
 use crate::redirect::CmdOutput;
 use crate::utils;
@@ -6,7 +7,6 @@ use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 use std::str::FromStr;
-
 // ---------------------------------------------------------------------------
 // Builtin infrastructure
 // ---------------------------------------------------------------------------
@@ -44,6 +44,7 @@ impl BuiltinRegistry {
         reg.register("cd", builtin_cd);
         reg.register("complete", builtin_complete);
         reg.register("jobs", builtin_jobs);
+        reg.register("history", builtin_history);
         reg
     }
 

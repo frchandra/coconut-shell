@@ -65,7 +65,7 @@ pub fn read_line(ctx: &RuntimeContext) -> String {
 
     loop {
         stdin.lock().read_exact(&mut byte).unwrap();
-
+        // todo implement cursor placement using arrow keys
         match byte[0] {
             b'\t' => {
                 tab_count += 1;
