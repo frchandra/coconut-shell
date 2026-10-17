@@ -7,6 +7,10 @@ pub fn builtin_history(_args: &[String], ctx: &RuntimeContext) -> BuiltinResult 
     BuiltinResult::Output(CmdOutput::out(output))
 }
 pub fn append_history(command: &String, ctx: &RuntimeContext) {
-    ctx.history.borrow_mut().push(command.clone());
-    ctx.history.borrow_mut().push("\n".to_string());
+    let index = ctx.history.borrow().len() + 1;
+    let mut entry = "\n".to_string() + &index.to_string() + " " + &command;
+    if index == 1 {
+        entry = entry.trim_start_matches('\n').to_string();
+    }
+    ctx.history.borrow_mut().push(entry);
 }
