@@ -64,10 +64,14 @@ pub fn read_line(ctx: &RuntimeContext) -> String {
 
     let mut cursor: usize = line.len(); // add this above the loop, tracks position in `line`
 
+    let mut history_index = ctx.history.borrow().len();
+    let mut saved_line = String::new();
+
     loop {
         stdin.lock().read_exact(&mut byte).unwrap();
 
         match byte[0] {
+            //detect up arrow and down arrow for history navigation
             0x1B => {
                 // possible escape sequence — read the next two bytes
                 let mut seq = [0u8; 2];
@@ -93,8 +97,48 @@ pub fn read_line(ctx: &RuntimeContext) -> String {
                                 io::stdout().flush().unwrap();
                             }
                         }
-                        b'A' | b'B' => {
-                            // up/down — hook into history navigation here if you have it
+                        b'A' => {
+                            // up arrow
+                            let history = ctx.history.borrow();
+                            if history_index > 0 {
+                                if history_index == history.len() {
+                                    saved_line = line.clone();
+                                }
+                                history_index -= 1;
+                                
+                                print!("\r$ ");
+                                for _ in 0..line.len() {
+                                    print!(" ");
+                                }
+                                print!("\r$ ");
+
+                                line = history[history_index].clone();
+                                cursor = line.len();
+                                print!("{}", line);
+                                io::stdout().flush().unwrap();
+                            }
+                        }
+                        b'B' => {
+                            // down arrow
+                            let history = ctx.history.borrow();
+                            if history_index < history.len() {
+                                history_index += 1;
+                                
+                                print!("\r$ ");
+                                for _ in 0..line.len() {
+                                    print!(" ");
+                                }
+                                print!("\r$ ");
+
+                                if history_index == history.len() {
+                                    line = saved_line.clone();
+                                } else {
+                                    line = history[history_index].clone();
+                                }
+                                cursor = line.len();
+                                print!("{}", line);
+                                io::stdout().flush().unwrap();
+                            }
                         }
                         _ => {}
                     }
