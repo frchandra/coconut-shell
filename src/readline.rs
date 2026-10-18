@@ -3,7 +3,6 @@ use std::{env, fs};
 
 use crate::builtins;
 use crate::context::RuntimeContext;
-// use crate::jobs::clear_finished_jobs;
 use crate::utils::get_path_executables_deduped;
 
 use crate::terminal;
@@ -63,10 +62,45 @@ pub fn read_line(ctx: &RuntimeContext) -> String {
     let mut byte = [0u8; 1];
     let mut tab_count: u32 = 0;
 
+    let mut cursor: usize = line.len(); // add this above the loop, tracks position in `line`
+
     loop {
         stdin.lock().read_exact(&mut byte).unwrap();
-        // todo implement cursor placement using arrow keys
+
         match byte[0] {
+            0x1B => {
+                // possible escape sequence — read the next two bytes
+                let mut seq = [0u8; 2];
+                if stdin.lock().read_exact(&mut seq).is_err() {
+                    continue; // lone ESC, ignore
+                }
+
+                if seq[0] == b'[' {
+                    match seq[1] {
+                        b'C' => {
+                            // right arrow
+                            if cursor < line.len() {
+                                cursor += 1;
+                                print!("\x1B[1C");
+                                io::stdout().flush().unwrap();
+                            }
+                        }
+                        b'D' => {
+                            // left arrow
+                            if cursor > 0 {
+                                cursor -= 1;
+                                print!("\x1B[1D");
+                                io::stdout().flush().unwrap();
+                            }
+                        }
+                        b'A' | b'B' => {
+                            // up/down — hook into history navigation here if you have it
+                        }
+                        _ => {}
+                    }
+                }
+                tab_count = 0;
+            }
             b'\t' => {
                 tab_count += 1;
 
@@ -79,6 +113,7 @@ pub fn read_line(ctx: &RuntimeContext) -> String {
                 } else {
                     handle_tab_files(&mut line, &prev_words, &prefix, tab_count);
                 }
+                cursor = line.len(); // re-sync cursor after completion mutates line
             }
             b'\r' | b'\n' => {
                 terminal::set_raw_mode(false).expect("failed to restore terminal");
@@ -86,13 +121,19 @@ pub fn read_line(ctx: &RuntimeContext) -> String {
                 return line;
             }
             127 | 8 => {
-                handle_backspace(&mut line);
+                handle_backspace(&mut line, &mut cursor);
                 tab_count = 0;
             }
             c if c >= 32 => {
                 let ch = c as char;
-                line.push(ch);
-                print!("{ch}");
+                line.insert(cursor, ch);
+                cursor += 1;
+
+                // redraw from insertion point to end so mid-line inserts shift correctly
+                print!("{}", &line[cursor - 1..]);
+                for _ in cursor..line.len() {
+                    print!("\x08");
+                }
                 io::stdout().flush().unwrap();
                 tab_count = 0;
             }
@@ -181,12 +222,24 @@ fn handle_tab_files(line: &mut String, prev_words: &[String], prefix: &str, tab_
 }
 
 /// Process a backspace / delete-backward press.
-fn handle_backspace(line: &mut String) {
-    if line.pop().is_some() {
-        print!("\x08 \x08");
-    } else {
-        print!("\x07"); // bell
+fn handle_backspace(line: &mut String, cursor: &mut usize) {
+    if *cursor == 0 {
+        print!("\x07"); // bell — nothing to delete
+        io::stdout().flush().unwrap();
+        return;
     }
+
+    line.remove(*cursor - 1);
+    *cursor -= 1;
+
+    // redraw from cursor to end of line, then clear the leftover trailing char,
+    // then move the terminal cursor back to the correct spot
+    let tail = &line[*cursor..];
+    print!("\x08{tail} \x08"); // backspace, reprint tail, blank the old last char, backspace once
+    for _ in 0..tail.len() {
+        print!("\x08"); // move cursor back to correct position after the redraw
+    }
+
     io::stdout().flush().unwrap();
 }
 
