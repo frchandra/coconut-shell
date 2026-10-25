@@ -2,7 +2,7 @@ use crate::builtins::BuiltinResult;
 use crate::context::RuntimeContext;
 use crate::redirect::CmdOutput;
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 use crate::utils::expand_tilde;
 
 pub fn builtin_history(args: &[String], ctx: &RuntimeContext) -> BuiltinResult {
@@ -16,7 +16,17 @@ pub fn builtin_history(args: &[String], ctx: &RuntimeContext) -> BuiltinResult {
                 "history: missing file path after -r".to_string(),
             ));
         }
-    } else if let Some(limit) = args.get(0) {
+    } else if args.get(0) == Some(&"-w".into()) {
+        if let Some(file_path) = args.get(1) {
+            save_history_to_file(file_path, ctx);
+            return BuiltinResult::Output(CmdOutput::empty())
+        } else {
+            return BuiltinResult::Output(CmdOutput::err(
+                "history: missing file path after -w".to_string(),
+            ));
+        }
+    }    
+     else if let Some(limit) = args.get(0) {
         if let Ok(limit) = limit.parse::<usize>() {
             let history = ctx.history.borrow();
             let start = history.len() - limit;
@@ -63,6 +73,25 @@ pub fn load_history_from_file(path: &String, ctx: &RuntimeContext) {
         // Skip empty/whitespace-only lines
         if !line.trim().is_empty() {
             history.push(line);
+        }
+    }
+}
+
+pub fn save_history_to_file(path: &String, ctx: &RuntimeContext) {
+    // Expand a leading '~' and try to open the file. Silently return on errors.
+    let expanded = expand_tilde(path);
+    let file = match File::create(expanded) {
+        Ok(f) => f,
+        Err(_) => return,
+    };
+
+    let mut writer = std::io::BufWriter::new(file);
+    let history = ctx.history.borrow();
+
+    for entry in history.iter() {
+        if let Err(_) = writeln!(writer, "{}", entry) {
+            // Silently ignore write errors
+            return;
         }
     }
 }
