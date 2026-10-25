@@ -122,25 +122,48 @@ fn builtin_cd(args: &[String], _ctx: &RuntimeContext) -> BuiltinResult {
 }
 
 fn builtin_complete(args: &[String], ctx: &RuntimeContext) -> BuiltinResult {
-    if args[0] == "-p" {
-        // let value = ctx.completion.borrow().get().unwrap_or(&"".to_string()).clone();
-        if let Some(value) = ctx.completion.borrow().get(args[1].as_str()) {
-            return BuiltinResult::Output(CmdOutput::out(format!(
-                "complete -C '{}' {}",
-                value, args[1]
-            )));
-        } else {
-            return BuiltinResult::Output(CmdOutput::err(format!(
-                "complete: {}: no completion specification",
-                args[1]
-            )));
+    let Some(flag) = args.first().map(|s| s.as_str()) else {
+        return BuiltinResult::Output(CmdOutput::empty());
+    };
+
+    match flag {
+        "-p" => {
+            let Some(name) = args.get(1) else {
+                return BuiltinResult::Output(CmdOutput::empty());
+            };
+
+            if let Some(value) = ctx.completion.borrow().get(name.as_str()) {
+                return BuiltinResult::Output(CmdOutput::out(format!(
+                    "complete -C '{}' {}",
+                    value, name
+                )));
+            } else {
+                return BuiltinResult::Output(CmdOutput::err(format!(
+                    "complete: {}: no completion specification",
+                    name
+                )));
+            }
         }
-    } else if args[0] == "-C" {
-        ctx.completion
-            .borrow_mut()
-            .insert(args[2].clone(), args[1].clone());
-    } else if args[0] == "-r" {
-        ctx.completion.borrow_mut().remove(args[1].as_str());
+        "-C" => {
+            let Some(command) = args.get(1) else {
+                return BuiltinResult::Output(CmdOutput::empty());
+            };
+            let Some(name) = args.get(2) else {
+                return BuiltinResult::Output(CmdOutput::empty());
+            };
+
+            ctx.completion
+                .borrow_mut()
+                .insert(name.clone(), command.clone());
+        }
+        "-r" => {
+            let Some(name) = args.get(1) else {
+                return BuiltinResult::Output(CmdOutput::empty());
+            };
+            ctx.completion.borrow_mut().remove(name.as_str());
+        }
+        _ => {}
     }
+
     BuiltinResult::Output(CmdOutput::empty())
 }
