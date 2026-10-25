@@ -19,6 +19,9 @@ pub struct RuntimeContext {
     /// Uses `Arc<Mutex<>>` so it can be safely sent to background threads.
     pub jobs: Arc<Mutex<JobContext>>,
     pub history: RefCell<Vec<String>>,
+    /// Index of history entries that have been written/appended to the history file.
+    /// Used by `history -a` to append only new entries since the last write/load.
+    pub history_write_index: RefCell<usize>,
 }
 
 impl RuntimeContext {
@@ -31,6 +34,7 @@ impl RuntimeContext {
             completion: RefCell::new(HashMap::new()),
             jobs: Arc::new(Mutex::new(JobContext::new())),
             history: RefCell::new(Vec::new()),
+            history_write_index: RefCell::new(0),
         }
     }
 }
