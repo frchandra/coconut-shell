@@ -1,4 +1,4 @@
-use crate::history::append_history;
+use crate::history::{append_history, load_history_on_startup};
 
 mod builtins;
 mod context;
@@ -16,6 +16,7 @@ mod utils;
 fn main() {
     let registry = builtins::BuiltinRegistry::new();
     let ctx = context::RuntimeContext::new(&registry);
+    load_history_on_startup(&ctx);
 
     // print_prompt();
     loop {

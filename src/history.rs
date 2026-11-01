@@ -5,6 +5,8 @@ use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use crate::utils::expand_tilde;
 
+const HISTFILE_ENV_VAR: &str = "HISTFILE";
+
 pub fn builtin_history(args: &[String], ctx: &RuntimeContext) -> BuiltinResult {
     //check if args[0] exist
     if args.get(0) == Some(&"-r".into()) {
@@ -149,4 +151,9 @@ pub fn append_history_to_file(path: &String, ctx: &RuntimeContext) {
 
     // Update the written index to the end of history
     *ctx.history_write_index.borrow_mut() = history.len();
+}
+
+pub fn load_history_on_startup(ctx: &RuntimeContext) {
+    let history_file = std::env::var(HISTFILE_ENV_VAR).unwrap_or_else(|_| HISTFILE_ENV_VAR.to_string());
+    load_history_from_file(&history_file, ctx);
 }
