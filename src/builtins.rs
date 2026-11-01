@@ -1,5 +1,5 @@
 use crate::context::RuntimeContext;
-use crate::history::builtin_history;
+use crate::history::{builtin_history, save_history_on_exit};
 use crate::jobs::builtin_jobs;
 use crate::redirect::CmdOutput;
 use crate::utils;
@@ -75,7 +75,8 @@ impl BuiltinRegistry {
 // Builtin implementations
 // ---------------------------------------------------------------------------
 
-fn builtin_exit(_args: &[String], _ctx: &RuntimeContext) -> BuiltinResult {
+fn builtin_exit(_args: &[String], ctx: &RuntimeContext) -> BuiltinResult {
+    save_history_on_exit(ctx);
     BuiltinResult::Exit
 }
 

@@ -157,3 +157,10 @@ pub fn load_history_on_startup(ctx: &RuntimeContext) {
     let history_file = std::env::var(HISTFILE_ENV_VAR).unwrap_or_else(|_| HISTFILE_ENV_VAR.to_string());
     load_history_from_file(&history_file, ctx);
 }
+
+
+// todo handle SIGKILL and SIGTERM to save history on exit
+pub fn save_history_on_exit(ctx: &RuntimeContext) {
+    let history_file = std::env::var(HISTFILE_ENV_VAR).unwrap_or_else(|_| HISTFILE_ENV_VAR.to_string());
+    save_history_to_file(&history_file, ctx);
+}
