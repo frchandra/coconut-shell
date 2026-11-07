@@ -1,5 +1,6 @@
 use crate::context::RuntimeContext;
 use crate::history::{builtin_history, save_history_on_exit};
+use crate::declare::builtin_declare;
 use crate::jobs::builtin_jobs;
 use crate::redirect::CmdOutput;
 use crate::utils;
@@ -45,6 +46,7 @@ impl BuiltinRegistry {
         reg.register("complete", builtin_complete);
         reg.register("jobs", builtin_jobs);
         reg.register("history", builtin_history);
+        reg.register("declare", builtin_declare);
         reg
     }
 

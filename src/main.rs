@@ -12,6 +12,7 @@ mod terminal;
 mod tokenizer;
 mod trie;
 mod utils;
+mod declare;
 
 fn main() {
     let registry = builtins::BuiltinRegistry::new();
