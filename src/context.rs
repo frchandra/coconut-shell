@@ -22,6 +22,7 @@ pub struct RuntimeContext {
     /// Index of history entries that have been written/appended to the history file.
     /// Used by `history -a` to append only new entries since the last write/load.
     pub history_write_index: RefCell<usize>,
+    pub declared_variables: RefCell<HashMap<String, String>>,
 }
 
 impl RuntimeContext {
@@ -35,6 +36,7 @@ impl RuntimeContext {
             jobs: Arc::new(Mutex::new(JobContext::new())),
             history: RefCell::new(Vec::new()),
             history_write_index: RefCell::new(0),
+            declared_variables: RefCell::new(HashMap::new()),
         }
     }
 }
